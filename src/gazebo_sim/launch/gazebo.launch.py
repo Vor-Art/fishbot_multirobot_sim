@@ -26,15 +26,8 @@ def generate_launch_description():
         output='screen'
     )
 
-    start_robot_state_publisher_cmd = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        arguments=[urdf_model_path]
-    )
-
     launch_description = LaunchDescription()
     launch_description.add_action(start_gazebo_cmd)
     launch_description.add_action(spawn_entity_cmd)
-    launch_description.add_action(start_robot_state_publisher_cmd)
 
     return launch_description

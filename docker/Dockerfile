@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 FROM osrf/ros:humble-desktop
 SHELL ["/bin/bash", "-c"]
 
