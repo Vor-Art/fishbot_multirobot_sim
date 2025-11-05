@@ -1,4 +1,0 @@
-[submodule "src/navigation"]
-	path = src/navigation
-	url = https://github.com/fishros/navigation2.git
-	branch = main

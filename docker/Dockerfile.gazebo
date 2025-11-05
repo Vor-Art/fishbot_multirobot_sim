@@ -1,0 +1,29 @@
+ARG BASE_IMAGE=fishbot_base:latest
+FROM ${BASE_IMAGE}
+
+SHELL ["/bin/bash", "-c"]
+
+WORKDIR /fishbot_ws
+
+# Pre-copy manifests for dependency resolution
+COPY src/fishbot_description/package.xml src/fishbot_description/
+COPY src/gazebo_sim/package.xml src/gazebo_sim/
+
+RUN set -euxo pipefail \
+    && rosdep update \
+    && rosdep install --rosdistro humble --from-paths src --ignore-src -y
+
+# Copy sources
+COPY src/fishbot_description/ src/fishbot_description/
+COPY src/gazebo_sim/ src/gazebo_sim/
+
+RUN set -euxo pipefail \
+    && source /opt/ros/humble/setup.bash \
+    && colcon build --merge-install \
+        --packages-select fishbot_description gazebo_sim
+
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["bash"]
