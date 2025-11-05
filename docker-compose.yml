@@ -1,0 +1,87 @@
+services:
+  gazebo:
+    container_name: fishbot_gazebo
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ipc: host
+    tty: true
+    runtime: nvidia
+    privileged: true
+    network_mode: host
+    env_file: ./docker/ros.env
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${HOME}/.Xauthority:/root/.Xauthority:ro
+    command: >
+      bash -lc "ros2 launch fishbot_description gazebo.launch.py"
+
+  navigation:
+    container_name: fishbot_navigation
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ipc: host
+    tty: true
+    runtime: nvidia
+    privileged: true
+    network_mode: host
+    env_file: ./docker/ros.env
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${HOME}/.Xauthority:/root/.Xauthority:ro
+    command: >
+      bash -lc "ros2 launch fishbot_navigation2 navigation2.launch.py 'use_sim_time:=True'"
+
+  rviz:
+    container_name: fishbot_rviz
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ipc: host
+    tty: true
+    runtime: nvidia
+    privileged: true
+    network_mode: host
+    env_file: ./docker/ros.env
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${HOME}/.Xauthority:/root/.Xauthority:ro
+    command: >
+      bash -lc "ros2 launch fishbot_description display_rviz2.launch.py"
+
+  cartographer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ipc: host
+    tty: true
+    runtime: nvidia
+    privileged: true
+    network_mode: host
+    env_file: ./docker/ros.env
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${HOME}/.Xauthority:/root/.Xauthority:ro
+    command: >
+      bash -lc "ros2 launch fishbot_cartographer cartographer.launch.py"
