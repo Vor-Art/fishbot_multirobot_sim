@@ -17,6 +17,7 @@ def generate_launch_description():
         arguments=[urdf_model_path]
     )
 
-    return LaunchDescription([
+    launch_description = LaunchDescription([
         robot_state_publisher_node,
     ])
+    return launch_description

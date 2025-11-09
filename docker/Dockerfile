@@ -13,3 +13,6 @@ RUN apt-get update \
         python3-vcstool \
         python3-colcon-common-extensions \
         ros-humble-gazebo-ros-pkgs
+
+# DO NOT CLEAR THE `rm -rf /var/lib/apt/lists/*`
+# it leads to the errors in rosdep install

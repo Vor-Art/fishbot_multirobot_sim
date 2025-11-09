@@ -7,8 +7,7 @@ WORKDIR /fishbot_ws
 
 COPY src/gazebo_sim/package.xml src/gazebo_sim/
 
-RUN set -euxo pipefail \
-    && rosdep update \
+RUN rosdep update \
     && rosdep install --rosdistro humble --from-paths src --ignore-src -y
 
 COPY src/gazebo_sim/ src/gazebo_sim/
