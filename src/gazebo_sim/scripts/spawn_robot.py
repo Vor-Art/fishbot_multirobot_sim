@@ -43,7 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Spawn a gazebo_sim robot blueprint into Gazebo.')
     parser.add_argument('--robot', required=True, help='Blueprint name (matches robots/<name> folder).')
     parser.add_argument('--name', required=True, help='Entity/namespace name for Gazebo and ROS topics.')
-    parser.add_argument('--reference_frame', type=str, default='world', help='Reference frame to spawn.')
+    parser.add_argument('--reference_frame', default='world', help='Reference frame to spawn.')
     parser.add_argument('--x', type=float, default=0.0, help='Initial x position (meters).')
     parser.add_argument('--y', type=float, default=0.0, help='Initial y position (meters).')
     parser.add_argument('--z', type=float, default=0.0, help='Initial z position (meters).')
