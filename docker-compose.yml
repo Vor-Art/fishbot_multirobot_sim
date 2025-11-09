@@ -29,6 +29,7 @@ services:
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${HOME}/.Xauthority:/root/.Xauthority:ro
+      - ./src/gazebo_sim/:/fishbot_ws/src/gazebo_sim/
     command: >
       bash -lc "ros2 launch gazebo_sim gazebo.launch.py"
 

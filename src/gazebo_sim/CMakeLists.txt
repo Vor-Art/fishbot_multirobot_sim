@@ -3,8 +3,16 @@ project(gazebo_sim)
 
 find_package(ament_cmake REQUIRED)
 
-install(DIRECTORY launch urdf world
+install(DIRECTORY launch robots worlds
   DESTINATION share/${PROJECT_NAME}
+)
+
+install(PROGRAMS scripts/spawn_robot.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(FILES scripts/robot_utils.py
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 install(FILES package.xml
