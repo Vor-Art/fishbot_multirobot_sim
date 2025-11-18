@@ -16,7 +16,7 @@ from spawn_robot import GazeboSpawner, RobotBlueprint
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Spawn N instances of a gazebo_sim robot blueprint.')
     parser.add_argument('--count', type=int, default=1, help='Number of robots to spawn.')
-    parser.add_argument('--robot', default='fishbot_v1', help='Blueprint name (matches robots/<name> folder).')
+    parser.add_argument('--robot', default='fishbot_v2_3d', help='Blueprint name (matches robots/<name> folder).')
     parser.add_argument('--name-prefix', default='bot', help='Prefix for generated entity/namespace names.')
     parser.add_argument('--start-index', type=int, default=1, help='Starting index appended to the name prefix.')
     parser.add_argument('--reference_frame', default='world', help='Reference frame to spawn.')
