@@ -337,7 +337,7 @@
         <ros>
           <remapping>~/out:=${lidar_pub}</remapping>
         </ros>
-        <output_type>sensor_msgs/LaserScan</output_type>
+        <output_type>sensor_msgs/PointCloud2</output_type>
         <frame_name>${lidar_frame}</frame_name>
       </plugin>
     </sensor>
