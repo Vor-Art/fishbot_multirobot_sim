@@ -33,3 +33,22 @@ services:
     command: >
       bash -lc "ros2 launch gazebo_sim quick.launch.py"
 
+  navigation:
+    container_name: fishbot_navigation
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.navigation
+      args:
+        BASE_IMAGE: fishbot_base:latest
+    depends_on:
+      - base
+    network_mode: host
+    ipc: host
+    tty: true
+    env_file: ./docker/ros.env
+    environment:
+      - FISHBOT_NAV_ROBOTS=${FISHBOT_NAV_ROBOTS:-bot1}
+    volumes:
+      - ./src/navigation/:/fishbot_ws/src/navigation/
+    command: >
+      bash -lc "ros2 launch fishbot_navigation navigation.launch.py robots:=${FISHBOT_NAV_ROBOTS:-bot1}"
