@@ -7,16 +7,6 @@ install(DIRECTORY launch robots worlds
   DESTINATION share/${PROJECT_NAME}
 )
 
-install(PROGRAMS
-  scripts/spawn_robot.py
-  scripts/spawn_robots.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-install(FILES scripts/robot_utils.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-
 install(FILES package.xml
   DESTINATION share/${PROJECT_NAME}
 )

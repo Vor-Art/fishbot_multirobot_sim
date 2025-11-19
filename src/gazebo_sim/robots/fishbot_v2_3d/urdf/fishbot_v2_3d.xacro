@@ -1,7 +1,10 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="fishbot_v2_3d">
   <xacro:arg name="config_file" default="$(find gazebo_sim)/robots/fishbot_v2_3d/config/fishbot_v2_3d.yaml"/>
+  <xacro:arg name="robot_namespace" default=""/>
   <xacro:property name="config_file" value="$(arg config_file)"/>
+  <xacro:property name="robot_namespace" value="$(arg robot_namespace)"/>
+  <xacro:property name="frame_prefix" value="${robot_namespace + '/' if robot_namespace != '' else ''}"/>
 
   <xacro:property name="cfg" value="${xacro.load_yaml(config_file)}"/>
   <xacro:property name="robot_cfg" value="${cfg['robot']}"/>
@@ -19,6 +22,11 @@
   <xacro:property name="base_frame" value="${robot_cfg['base_frame']}"/>
   <xacro:property name="lidar_frame" value="${robot_cfg['lidar_frame']}"/>
   <xacro:property name="imu_frame" value="${robot_cfg['imu_frame']}"/>
+  <xacro:property name="odom_frame" value="${robot_cfg['odom_frame']}"/>
+  <xacro:property name="base_frame_prefixed" value="${frame_prefix + base_frame}"/>
+  <xacro:property name="lidar_frame_prefixed" value="${frame_prefix + lidar_frame}"/>
+  <xacro:property name="imu_frame_prefixed" value="${frame_prefix + imu_frame}"/>
+  <xacro:property name="odom_frame_prefixed" value="${frame_prefix + odom_frame}"/>
 
   <xacro:property name="odom_pub" value="${robot_cfg['odom_pub']}"/>
   <xacro:property name="lidar_pub" value="${robot_cfg['lidar_pub']}"/>
@@ -219,7 +227,7 @@
   <gazebo>
     <plugin name="diff_drive" filename="libgazebo_ros_diff_drive.so">
       <ros>
-        <remapping>cmd_vel:=cmd_vel</remapping>
+        <namespace>${robot_namespace}</namespace>
         <remapping>odom:=${odom_pub}</remapping>
       </ros>
       <update_rate>${diff_drive_cfg['update_rate']}</update_rate>
@@ -231,9 +239,8 @@
       <max_wheel_acceleration>${diff_drive_cfg['max_wheel_accel']}</max_wheel_acceleration>
       <publish_odom>${'true' if diff_drive_cfg['publish_odom'] else 'false'}</publish_odom>
       <publish_odom_tf>${'true' if diff_drive_cfg['publish_odom_tf'] else 'false'}</publish_odom_tf>
-      <publish_wheel_tf>${'true' if diff_drive_cfg['publish_wheel_tf'] else 'false'}</publish_wheel_tf>
-      <odometry_frame>odom</odometry_frame>
-      <robot_base_frame>${base_frame}</robot_base_frame>
+      <odometry_frame>${odom_frame_prefixed}</odometry_frame>
+      <robot_base_frame>${base_frame_prefixed}</robot_base_frame>
     </plugin>
   </gazebo>
 
@@ -241,6 +248,7 @@
     <sensor name="imu_sensor" type="imu">
       <plugin filename="libgazebo_ros_imu_sensor.so" name="imu_plugin">
         <ros>
+          <namespace>${robot_namespace}</namespace>
           <remapping>~/out:=${imu_pub}</remapping>
         </ros>
         <initial_orientation_as_reference>false</initial_orientation_as_reference>
@@ -339,10 +347,11 @@
       </ray>
       <plugin name="lidar_plugin" filename="libgazebo_ros_ray_sensor.so">
         <ros>
+          <namespace>${robot_namespace}</namespace>
           <remapping>~/out:=${lidar_pub}</remapping>
         </ros>
         <output_type>sensor_msgs/PointCloud2</output_type>
-        <frame_name>${lidar_frame}</frame_name>
+        <frame_name>${lidar_frame_prefixed}</frame_name>
       </plugin>
     </sensor>
   </gazebo>

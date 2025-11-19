@@ -4,6 +4,7 @@ robot:
   base_frame: base_link
   lidar_frame: lidar_link
   imu_frame: imu_link
+  odom_frame: odom
   # topics
   odom_pub: wheel_odom
   lidar_pub: lidar_points
@@ -37,8 +38,7 @@ plugins:
     max_wheel_torque: 20.0
     max_wheel_accel: 1.0
     publish_odom: true
-    publish_odom_tf: false
-    publish_wheel_tf: false
+    publish_odom_tf: true
 
 imu:
   update_rate: 100
