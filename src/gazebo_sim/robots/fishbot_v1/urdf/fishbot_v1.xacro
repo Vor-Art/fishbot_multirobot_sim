@@ -22,6 +22,7 @@
   <xacro:property name="base_frame" value="${robot_cfg['base_frame']}"/>
   <xacro:property name="lidar_frame" value="${robot_cfg['lidar_frame']}"/>
   <xacro:property name="imu_frame" value="${robot_cfg['imu_frame']}"/>
+  <xacro:property name="laser_retro" value="${robot_cfg.get('laser_retro', 0.0)}"/>
   <xacro:property name="odom_frame" value="${robot_cfg['odom_frame']}"/>
   <xacro:property name="base_frame_prefixed" value="${frame_prefix + base_frame}"/>
   <xacro:property name="lidar_frame_prefixed" value="${frame_prefix + lidar_frame}"/>
@@ -239,9 +240,26 @@
       <max_wheel_acceleration>${diff_drive_cfg['max_wheel_accel']}</max_wheel_acceleration>
       <publish_odom>${'true' if diff_drive_cfg['publish_odom'] else 'false'}</publish_odom>
       <publish_odom_tf>${'true' if diff_drive_cfg['publish_odom_tf'] else 'false'}</publish_odom_tf>
+      <tf_prefix>${frame_prefix}</tf_prefix>
       <odometry_frame>${odom_frame_prefixed}</odometry_frame>
       <robot_base_frame>${base_frame_prefixed}</robot_base_frame>
     </plugin>
+  </gazebo>
+
+  <gazebo reference="${base_frame}">
+    <laserRetro>${laser_retro}</laserRetro>
+  </gazebo>
+
+  <gazebo reference="left_wheel_link">
+    <laserRetro>${laser_retro}</laserRetro>
+  </gazebo>
+
+  <gazebo reference="right_wheel_link">
+    <laserRetro>${laser_retro}</laserRetro>
+  </gazebo>
+
+  <gazebo reference="caster_link">
+    <laserRetro>${laser_retro}</laserRetro>
   </gazebo>
 
   <gazebo reference="${imu_frame}">
