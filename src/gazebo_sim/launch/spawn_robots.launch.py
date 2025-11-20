@@ -50,6 +50,17 @@ def generate_launch_description() -> LaunchDescription:
         spawn_nodes = []
         bridge_nodes = []
 
+        tf_bridge = Node(
+            package='ros_gz_bridge',
+            executable='parameter_bridge',
+            name='tf_bridge',
+            output='screen',
+            arguments=[
+                '/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
+            ],
+        )
+        bridge_nodes.append(tf_bridge)
+
         for i in range(count):
             name = f'{name_prefix}{start_index + i}'
             robot_description = Command([ 'xacro ', xacro_path,

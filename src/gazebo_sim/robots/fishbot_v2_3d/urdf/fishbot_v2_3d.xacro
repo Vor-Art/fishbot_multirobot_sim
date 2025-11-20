@@ -37,6 +37,7 @@
   <xacro:property name="lidar_topic" value="${topic_prefix + '/' + lidar_pub if topic_prefix else '/' + lidar_pub}"/>
   <xacro:property name="imu_topic" value="${topic_prefix + '/' + imu_pub if topic_prefix else '/' + imu_pub}"/>
   <xacro:property name="cmd_vel_topic" value="${topic_prefix + '/cmd_vel' if topic_prefix else '/cmd_vel'}"/>
+  <xacro:property name="tf_topic" value="/tf"/>
 
   <xacro:property name="wheel_radius" value="${wheel_geom['radius']}"/>
   <xacro:property name="wheel_length" value="${wheel_geom['length']}"/>
@@ -241,6 +242,7 @@
       <wheel_radius>${wheel_diameter * 0.5}</wheel_radius>
       <topic>${cmd_vel_topic}</topic>
       <odom_topic>${odom_topic}</odom_topic>
+      <tf_topic>${tf_topic}</tf_topic>
       <frame_id>${odom_frame_prefixed}</frame_id>
       <child_frame_id>${base_frame_prefixed}</child_frame_id>
     </plugin>
