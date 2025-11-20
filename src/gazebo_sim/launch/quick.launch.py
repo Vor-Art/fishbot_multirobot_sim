@@ -11,18 +11,24 @@ def generate_launch_description() -> LaunchDescription:
     """Launch Gazebo and delegate robot spawning to spawn_robots.launch.py."""
     pkg_share = get_package_share_directory('gazebo_sim')
 
+    default_world = os.environ.get('GAZEBO_WORLD', 'fishbot.world')
+
     declare_args = [
+        DeclareLaunchArgument('world', default_value=default_world),
+        DeclareLaunchArgument('world_name', default_value='default'),
         DeclareLaunchArgument('robot', default_value='fishbot_v2_3d'),
         DeclareLaunchArgument('count', default_value='3'),
         DeclareLaunchArgument('name_prefix', default_value='bot'),
         DeclareLaunchArgument('start_index', default_value='1'),
-        DeclareLaunchArgument('reference_frame', default_value='world')
     ]
 
     gazebo_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_share, 'launch', 'gazebo.launch.py')
-        )
+        ),
+        launch_arguments={
+            'world': LaunchConfiguration('world'),
+        }.items(),
     )
 
     spawn_launch = IncludeLaunchDescription(
@@ -30,11 +36,11 @@ def generate_launch_description() -> LaunchDescription:
             os.path.join(pkg_share, 'launch', 'spawn_robots.launch.py')
         ),
         launch_arguments={
+            'world_name': LaunchConfiguration('world_name'),
             'robot': LaunchConfiguration('robot'),
             'count': LaunchConfiguration('count'),
             'name_prefix': LaunchConfiguration('name_prefix'),
             'start_index': LaunchConfiguration('start_index'),
-            'reference_frame': LaunchConfiguration('reference_frame')
         }.items(),
     )
 

@@ -12,10 +12,10 @@ def generate_launch_description() -> LaunchDescription:
 
     declare_args = [
         DeclareLaunchArgument('robot', default_value='fishbot_v2_3d', description='Robot blueprint folder name.'),
+        DeclareLaunchArgument('world_name', default_value='default', description='Gazebo world name to target.'),
         DeclareLaunchArgument('count', default_value='3', description='Number of robots to spawn.'),
         DeclareLaunchArgument('name_prefix', default_value='bot', description='Prefix for spawned robot names.'),
         DeclareLaunchArgument('start_index', default_value='1', description='Starting index appended to the name prefix.'),
-        DeclareLaunchArgument('reference_frame', default_value='world', description='Reference frame for spawning.'),
         DeclareLaunchArgument('x', default_value='0.0'),
         DeclareLaunchArgument('y', default_value='0.0'),
         DeclareLaunchArgument('z', default_value='0.0'),
@@ -30,9 +30,9 @@ def generate_launch_description() -> LaunchDescription:
     def launch_setup(context, *args, **kwargs):
         robot = LaunchConfiguration('robot').perform(context)
         count = int(LaunchConfiguration('count').perform(context))
+        world_name = LaunchConfiguration('world_name').perform(context)
         name_prefix = LaunchConfiguration('name_prefix').perform(context)
         start_index = int(LaunchConfiguration('start_index').perform(context))
-        reference_frame = LaunchConfiguration('reference_frame').perform(context)
         base_x = float(LaunchConfiguration('x').perform(context))
         base_y = float(LaunchConfiguration('y').perform(context))
         base_z = float(LaunchConfiguration('z').perform(context))
@@ -48,6 +48,7 @@ def generate_launch_description() -> LaunchDescription:
 
         rsp_nodes = []
         spawn_nodes = []
+        bridge_nodes = []
 
         for i in range(count):
             name = f'{name_prefix}{start_index + i}'
@@ -72,18 +73,35 @@ def generate_launch_description() -> LaunchDescription:
 
             spawn_nodes.append(
                 Node(
-                    package='gazebo_ros',
-                    executable='spawn_entity.py',
-                    arguments=[
-                        '-entity', name,
-                        '-topic', f'/{name}/robot_description',
-                        '-x', str(base_x + dx * i),
-                        '-y', str(base_y + dy * i),
-                        '-z', str(base_z + dz * i),
-                        '-Y', str(yaw + yaw_step * i),
-                        '-reference_frame', reference_frame,
-                    ],
+                    package='ros_gz_sim',
+                    executable='create',
+                    name=f'{name}_spawner',
                     output='screen',
+                    arguments=[
+                        '--world', world_name,
+                        '--name', name,
+                        '--allow_renaming=false',
+                        '--string', robot_description,
+                        '--x', str(base_x + dx * i),
+                        '--y', str(base_y + dy * i),
+                        '--z', str(base_z + dz * i),
+                        '--Y', str(yaw + yaw_step * i),
+                    ],
+                )
+            )
+
+            bridge_nodes.append(
+                Node(
+                    package='ros_gz_bridge',
+                    executable='parameter_bridge',
+                    name=f'{name}_bridge',
+                    output='screen',
+                    arguments=[
+                        f'/{name}/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist',
+                        f'/{name}/wheel_odom@nav_msgs/msg/Odometry@gz.msgs.Odometry',
+                        f'/{name}/imu@sensor_msgs/msg/Imu@gz.msgs.IMU',
+                        f'/{name}/lidar_points/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked',
+                    ],
                 )
             )
 
@@ -91,7 +109,7 @@ def generate_launch_description() -> LaunchDescription:
             return []
 
         spawn_after_delay = TimerAction(period=spawn_delay, actions=spawn_nodes)
-        return rsp_nodes + [spawn_after_delay]
+        return rsp_nodes + bridge_nodes + [spawn_after_delay]
 
     ld = LaunchDescription()
     for action in declare_args:

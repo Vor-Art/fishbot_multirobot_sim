@@ -32,6 +32,12 @@
   <xacro:property name="odom_pub" value="${robot_cfg['odom_pub']}"/>
   <xacro:property name="lidar_pub" value="${robot_cfg['lidar_pub']}"/>
   <xacro:property name="imu_pub" value="${robot_cfg['imu_pub']}"/>
+  <xacro:property name="topic_prefix" value="${'/' + robot_namespace if robot_namespace else ''}"/>
+  <xacro:property name="odom_topic" value="${topic_prefix + '/' + odom_pub if topic_prefix else '/' + odom_pub}"/>
+  <xacro:property name="lidar_topic" value="${topic_prefix + '/' + lidar_pub if topic_prefix else '/' + lidar_pub}"/>
+  <xacro:property name="imu_topic" value="${topic_prefix + '/' + imu_pub if topic_prefix else '/' + imu_pub}"/>
+  <xacro:property name="cmd_vel_topic" value="${topic_prefix + '/cmd_vel' if topic_prefix else '/cmd_vel'}"/>
+  <xacro:property name="tf_topic" value="${topic_prefix + '/tf' if topic_prefix else '/tf'}"/>
 
   <xacro:property name="wheel_radius" value="${wheel_geom['radius']}"/>
   <xacro:property name="wheel_length" value="${wheel_geom['length']}"/>
@@ -226,23 +232,17 @@
   </gazebo>
 
   <gazebo>
-    <plugin name="diff_drive" filename="libgazebo_ros_diff_drive.so">
-      <ros>
-        <namespace>${robot_namespace}</namespace>
-        <remapping>odom:=${odom_pub}</remapping>
-      </ros>
-      <update_rate>${diff_drive_cfg['update_rate']}</update_rate>
+    <plugin name="diff_drive" filename="ignition-gazebo-diff-drive-system">
       <left_joint>left_wheel_joint</left_joint>
       <right_joint>right_wheel_joint</right_joint>
       <wheel_separation>${wheel_sep}</wheel_separation>
-      <wheel_diameter>${wheel_diameter}</wheel_diameter>
-      <max_wheel_torque>${diff_drive_cfg['max_wheel_torque']}</max_wheel_torque>
-      <max_wheel_acceleration>${diff_drive_cfg['max_wheel_accel']}</max_wheel_acceleration>
-      <publish_odom>${'true' if diff_drive_cfg['publish_odom'] else 'false'}</publish_odom>
-      <publish_odom_tf>${'true' if diff_drive_cfg['publish_odom_tf'] else 'false'}</publish_odom_tf>
-      <tf_prefix>${frame_prefix}</tf_prefix>
-      <odometry_frame>${odom_frame_prefixed}</odometry_frame>
-      <robot_base_frame>${base_frame_prefixed}</robot_base_frame>
+      <wheel_radius>${wheel_diameter * 0.5}</wheel_radius>
+      <odom_publish_frequency>${diff_drive_cfg['update_rate']}</odom_publish_frequency>
+      <topic>${cmd_vel_topic}</topic>
+      <odom_topic>${odom_topic}</odom_topic>
+      <tf_topic>${tf_topic}</tf_topic>
+      <frame_id>${odom_frame_prefixed}</frame_id>
+      <child_frame_id>${base_frame_prefixed}</child_frame_id>
     </plugin>
   </gazebo>
 
@@ -264,16 +264,12 @@
 
   <gazebo reference="${imu_frame}">
     <sensor name="imu_sensor" type="imu">
-      <plugin filename="libgazebo_ros_imu_sensor.so" name="imu_plugin">
-        <ros>
-          <namespace>${robot_namespace}</namespace>
-          <remapping>~/out:=${imu_pub}</remapping>
-        </ros>
-        <initial_orientation_as_reference>false</initial_orientation_as_reference>
-      </plugin>
       <always_on>true</always_on>
       <update_rate>${imu_cfg['update_rate']}</update_rate>
       <visualize>${'true' if imu_cfg['visualize'] else 'false'}</visualize>
+      <topic>${imu_topic}</topic>
+      <frame_id>${imu_frame_prefixed}</frame_id>
+      <enable_metrics>true</enable_metrics>
       <imu>
         <angular_velocity>
           <x>
@@ -332,12 +328,14 @@
   </gazebo>
 
   <gazebo reference="${lidar_frame}">
-    <sensor name="lidar_sensor" type="ray">
+    <sensor name="lidar_sensor" type="gpu_lidar">
       <always_on>true</always_on>
       <visualize>${'true' if lidar_cfg['visualize'] else 'false'}</visualize>
       <update_rate>${lidar_cfg['update_rate']}</update_rate>
       <pose>0 0 0.075 0 0 0</pose>
-      <ray>
+      <topic>${lidar_topic}</topic>
+      <frame_id>${lidar_frame_prefixed}</frame_id>
+      <lidar>
         <scan>
           <horizontal>
             <samples>${lidar_cfg['samples']}</samples>
@@ -345,6 +343,12 @@
             <min_angle>${lidar_cfg['min_angle']}</min_angle>
             <max_angle>${lidar_cfg['max_angle']}</max_angle>
           </horizontal>
+          <vertical>
+            <samples>1</samples>
+            <resolution>1</resolution>
+            <min_angle>0</min_angle>
+            <max_angle>0</max_angle>
+          </vertical>
         </scan>
         <range>
           <min>${lidar_cfg['range_min']}</min>
@@ -356,15 +360,7 @@
           <mean>0.0</mean>
           <stddev>${lidar_cfg['noise_stddev']}</stddev>
         </noise>
-      </ray>
-      <plugin name="lidar_plugin" filename="libgazebo_ros_ray_sensor.so">
-        <ros>
-          <namespace>${robot_namespace}</namespace>
-          <remapping>~/out:=${lidar_pub}</remapping>
-        </ros>
-        <output_type>sensor_msgs/PointCloud2</output_type>
-        <frame_name>${lidar_frame_prefixed}</frame_name>
-      </plugin>
+      </lidar>
     </sensor>
   </gazebo>
 
