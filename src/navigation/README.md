@@ -1,7 +1,7 @@
 # Fishbot Navigation Module
 
 This package hosts a lightweight per-robot navigation controller (`fishbot_navigation`).
-It assumes every robot provides the topics `/ROBOT/odom`, `/ROBOT/lidar_points` and `/ROBOT/cmd_vel` plus a
+It assumes every robot provides the topics `/ROBOT/odom` and `/ROBOT/cmd_vel` plus a
 `/ROBOT/move_base/goal` topic where RViz publishes 2D Nav Goals.
 
 ## Features
