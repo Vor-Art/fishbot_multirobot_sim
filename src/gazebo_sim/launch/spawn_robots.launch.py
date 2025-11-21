@@ -108,10 +108,10 @@ def generate_launch_description() -> LaunchDescription:
                     name=f'{name}_bridge',
                     output='screen',
                     arguments=[
-                        f'/{name}/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist',
-                        f'/{name}/wheel_odom@nav_msgs/msg/Odometry@gz.msgs.Odometry',
-                        f'/{name}/imu@sensor_msgs/msg/Imu@gz.msgs.IMU',
-                        f'/{name}/lidar_points/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked',
+                        f'/{name}/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
+                        f'/{name}/wheel_odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+                        f'/{name}/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
+                        f'/{name}/lidar_points/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
                     ],
                 )
             )
