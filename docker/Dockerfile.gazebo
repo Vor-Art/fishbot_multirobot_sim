@@ -1,7 +1,17 @@
 ARG BASE_IMAGE=fishbot_base:latest
 FROM ${BASE_IMAGE}
-
 SHELL ["/bin/bash", "-c"]
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ros-humble-ros-gz-sim \
+        ros-humble-ros-gz-bridge \
+        ros-humble-ros-gz-image \
+        mesa-utils \
+        vulkan-tools
+
+# DO NOT CLEAR THE `rm -rf /var/lib/apt/lists/*`
+# it leads to the errors in rosdep install
 
 WORKDIR /fishbot_ws
 

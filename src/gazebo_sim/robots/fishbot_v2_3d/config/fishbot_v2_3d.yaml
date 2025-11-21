@@ -1,5 +1,5 @@
 robot:
-  base_name: fishbot_v1
+  base_name: fishbot_v2_3d
   laser_retro: 5000.0
   # frames
   base_frame: base_link
@@ -54,12 +54,18 @@ imu:
 
 lidar:
   update_rate: 10
-  visualize: true
-  samples: 360
-  min_angle: 0.0
-  max_angle: 6.28
-  resolution: 1.0
+  visualize: false
+  h_rays:
+    samples: 360
+    min_angle: -3.14159
+    max_angle: 3.14159
+    resolution: 0.5
+  v_rays:
+    samples: 16
+    min_angle: -0.223599
+    max_angle: 0.561799
+    resolution: 0.5
   range_min: 0.12
-  range_max: 3.5
-  range_res: 0.015
+  range_max: 20.0
+  range_res: 0.01
   noise_stddev: 0.01

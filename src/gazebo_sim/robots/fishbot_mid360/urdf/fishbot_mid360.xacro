@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
-<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="fishbot_v1">
-  <xacro:arg name="config_file" default="$(find gazebo_sim)/robots/fishbot_v1/config/fishbot_v1.yaml"/>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="fishbot_mid360">
+  <xacro:arg name="config_file" default="$(find gazebo_sim)/robots/fishbot_mid360/config/fishbot_mid360.yaml"/>
   <xacro:arg name="robot_namespace" default=""/>
 
   <!-- Load YAML config -->
@@ -364,16 +364,16 @@
       <lidar>
         <scan>
           <horizontal>
-            <samples>${lidar_cfg['samples']}</samples>
-            <resolution>${lidar_cfg['resolution']}</resolution>
-            <min_angle>${lidar_cfg['min_angle']}</min_angle>
-            <max_angle>${lidar_cfg['max_angle']}</max_angle>
+            <samples>${lidar_cfg['h_rays']['samples']}</samples>
+            <resolution>${lidar_cfg['h_rays']['resolution']}</resolution>
+            <min_angle>${lidar_cfg['h_rays']['min_angle']}</min_angle>
+            <max_angle>${lidar_cfg['h_rays']['max_angle']}</max_angle>
           </horizontal>
           <vertical>
-            <samples>1</samples>
-            <resolution>1</resolution>
-            <min_angle>0</min_angle>
-            <max_angle>0</max_angle>
+            <samples>${lidar_cfg['v_rays']['samples']}</samples>
+            <resolution>${lidar_cfg['v_rays']['resolution']}</resolution>
+            <min_angle>${lidar_cfg['v_rays']['min_angle']}</min_angle>
+            <max_angle>${lidar_cfg['v_rays']['max_angle']}</max_angle>
           </vertical>
         </scan>
         <range>

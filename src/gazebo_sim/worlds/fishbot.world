@@ -55,11 +55,18 @@
             </plane>
           </geometry>
           <material>
-            <script>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-              <name>Gazebo/Grey</name>
-            </script>
-          </material>
+          <ambient>0.7 0.7 0.7 1</ambient>
+          <diffuse>0.7 0.7 0.7 1</diffuse>
+          <specular>0.2 0.2 0.2 1</specular>
+          <emissive>0 0 0 1</emissive>
+          <pbr>
+            <metal>
+              <albedo>0.7 0.7 0.7 1</albedo>
+              <roughness>0.4</roughness>
+              <metalness>0</metalness>
+            </metal>
+          </pbr>
+        </material>
         </visual>
         <self_collide>0</self_collide>
         <enable_wind>0</enable_wind>
@@ -74,6 +81,13 @@
       <real_time_factor>1</real_time_factor>
       <real_time_update_rate>1000</real_time_update_rate>
     </physics>
+    <plugin filename="ignition-gazebo-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="ignition-gazebo-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="ignition-gazebo-imu-system" name="gz::sim::systems::Imu"/>
+    <plugin filename="ignition-gazebo-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="ignition-gazebo-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
     <scene>
       <ambient>0.4 0.4 0.4 1</ambient>
       <background>0.7 0.7 0.7 1</background>
@@ -119,12 +133,18 @@
             </box>
           </geometry>
           <material>
-            <script>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-              <name>Gazebo/Grey</name>
-            </script>
-            <ambient>1 1 1 1</ambient>
-          </material>
+          <ambient>0.7 0.7 0.7 1</ambient>
+          <diffuse>0.7 0.7 0.7 1</diffuse>
+          <specular>0.2 0.2 0.2 1</specular>
+          <emissive>0 0 0 1</emissive>
+          <pbr>
+            <metal>
+              <albedo>0.7 0.7 0.7 1</albedo>
+              <roughness>0.4</roughness>
+              <metalness>0</metalness>
+            </metal>
+          </pbr>
+        </material>
           <meta>
             <layer>0</layer>
           </meta>
@@ -164,12 +184,18 @@
             </box>
           </geometry>
           <material>
-            <script>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-              <name>Gazebo/Grey</name>
-            </script>
-            <ambient>1 1 1 1</ambient>
-          </material>
+          <ambient>0.7 0.7 0.7 1</ambient>
+          <diffuse>0.7 0.7 0.7 1</diffuse>
+          <specular>0.2 0.2 0.2 1</specular>
+          <emissive>0 0 0 1</emissive>
+          <pbr>
+            <metal>
+              <albedo>0.7 0.7 0.7 1</albedo>
+              <roughness>0.4</roughness>
+              <metalness>0</metalness>
+            </metal>
+          </pbr>
+        </material>
           <meta>
             <layer>0</layer>
           </meta>
@@ -209,12 +235,18 @@
             </box>
           </geometry>
           <material>
-            <script>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-              <name>Gazebo/Grey</name>
-            </script>
-            <ambient>1 1 1 1</ambient>
-          </material>
+          <ambient>0.7 0.7 0.7 1</ambient>
+          <diffuse>0.7 0.7 0.7 1</diffuse>
+          <specular>0.2 0.2 0.2 1</specular>
+          <emissive>0 0 0 1</emissive>
+          <pbr>
+            <metal>
+              <albedo>0.7 0.7 0.7 1</albedo>
+              <roughness>0.4</roughness>
+              <metalness>0</metalness>
+            </metal>
+          </pbr>
+        </material>
           <meta>
             <layer>0</layer>
           </meta>
@@ -254,12 +286,18 @@
             </box>
           </geometry>
           <material>
-            <script>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-              <name>Gazebo/Grey</name>
-            </script>
-            <ambient>1 1 1 1</ambient>
-          </material>
+          <ambient>0.7 0.7 0.7 1</ambient>
+          <diffuse>0.7 0.7 0.7 1</diffuse>
+          <specular>0.2 0.2 0.2 1</specular>
+          <emissive>0 0 0 1</emissive>
+          <pbr>
+            <metal>
+              <albedo>0.7 0.7 0.7 1</albedo>
+              <roughness>0.4</roughness>
+              <metalness>0</metalness>
+            </metal>
+          </pbr>
+        </material>
           <meta>
             <layer>0</layer>
           </meta>
@@ -299,12 +337,18 @@
             </box>
           </geometry>
           <material>
-            <script>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-              <name>Gazebo/Grey</name>
-            </script>
-            <ambient>1 1 1 1</ambient>
-          </material>
+          <ambient>0.7 0.7 0.7 1</ambient>
+          <diffuse>0.7 0.7 0.7 1</diffuse>
+          <specular>0.2 0.2 0.2 1</specular>
+          <emissive>0 0 0 1</emissive>
+          <pbr>
+            <metal>
+              <albedo>0.7 0.7 0.7 1</albedo>
+              <roughness>0.4</roughness>
+              <metalness>0</metalness>
+            </metal>
+          </pbr>
+        </material>
           <meta>
             <layer>0</layer>
           </meta>
@@ -344,12 +388,18 @@
             </box>
           </geometry>
           <material>
-            <script>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-              <name>Gazebo/Grey</name>
-            </script>
-            <ambient>1 1 1 1</ambient>
-          </material>
+          <ambient>0.7 0.7 0.7 1</ambient>
+          <diffuse>0.7 0.7 0.7 1</diffuse>
+          <specular>0.2 0.2 0.2 1</specular>
+          <emissive>0 0 0 1</emissive>
+          <pbr>
+            <metal>
+              <albedo>0.7 0.7 0.7 1</albedo>
+              <roughness>0.4</roughness>
+              <metalness>0</metalness>
+            </metal>
+          </pbr>
+        </material>
           <meta>
             <layer>0</layer>
           </meta>
@@ -405,10 +455,17 @@
             </cylinder>
           </geometry>
           <material>
-            <script>
-              <name>Gazebo/Grey</name>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-            </script>
+            <ambient>0.7 0.7 0.7 1</ambient>
+            <diffuse>0.7 0.7 0.7 1</diffuse>
+            <specular>0.2 0.2 0.2 1</specular>
+            <emissive>0 0 0 1</emissive>
+            <pbr>
+              <metal>
+                <albedo>0.7 0.7 0.7 1</albedo>
+                <roughness>0.4</roughness>
+                <metalness>0</metalness>
+              </metal>
+            </pbr>
           </material>
         </visual>
         <self_collide>0</self_collide>
@@ -460,10 +517,17 @@
             </cylinder>
           </geometry>
           <material>
-            <script>
-              <name>Gazebo/Grey</name>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-            </script>
+            <ambient>0.7 0.7 0.7 1</ambient>
+            <diffuse>0.7 0.7 0.7 1</diffuse>
+            <specular>0.2 0.2 0.2 1</specular>
+            <emissive>0 0 0 1</emissive>
+            <pbr>
+              <metal>
+                <albedo>0.7 0.7 0.7 1</albedo>
+                <roughness>0.4</roughness>
+                <metalness>0</metalness>
+              </metal>
+            </pbr>
           </material>
         </visual>
         <self_collide>0</self_collide>
@@ -513,10 +577,17 @@
             </box>
           </geometry>
           <material>
-            <script>
-              <name>Gazebo/Grey</name>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-            </script>
+            <ambient>0.7 0.7 0.7 1</ambient>
+            <diffuse>0.7 0.7 0.7 1</diffuse>
+            <specular>0.2 0.2 0.2 1</specular>
+            <emissive>0 0 0 1</emissive>
+            <pbr>
+              <metal>
+                <albedo>0.7 0.7 0.7 1</albedo>
+                <roughness>0.4</roughness>
+                <metalness>0</metalness>
+              </metal>
+            </pbr>
           </material>
         </visual>
         <self_collide>0</self_collide>

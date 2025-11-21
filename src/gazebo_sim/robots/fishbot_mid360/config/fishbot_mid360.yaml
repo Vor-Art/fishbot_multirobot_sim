@@ -1,5 +1,5 @@
 robot:
-  base_name: fishbot_v1
+  base_name: fishbot_mid360
   laser_retro: 5000.0
   # frames
   base_frame: base_link
@@ -54,12 +54,18 @@ imu:
 
 lidar:
   update_rate: 10
-  visualize: true
-  samples: 360
-  min_angle: 0.0
-  max_angle: 6.28
-  resolution: 1.0
-  range_min: 0.12
-  range_max: 3.5
-  range_res: 0.015
+  visualize: false
+  h_rays:
+    samples: 720            # 0.5 deg step across 360 deg
+    min_angle: -3.14159
+    max_angle: 3.14159
+    resolution: 0.5
+  v_rays:
+    samples: 40             # Mid-360 is a 40-line LiDAR
+    min_angle: -0.514872    # -29.5 deg (half of 59 deg FOV)
+    max_angle: 0.514872     # +29.5 deg
+    resolution: 1.0
+  range_min: 0.10           # 10 cm min detection distance
+  range_max: 40.0           # 40 m @ 20% reflectivity
+  range_res: 0.01
   noise_stddev: 0.01
