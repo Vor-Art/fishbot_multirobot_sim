@@ -266,18 +266,21 @@
     </plugin>
   </gazebo>
 
-  <!-- Laser retro -->
+  <!-- High LiDAR reflectivity on robot body -->
   <gazebo reference="${base_frame}">
-    <laserRetro>${laser_retro}</laserRetro>
+    <visual><laser_retro>${laser_retro}</laser_retro></visual>
+  </gazebo>
+  <gazebo reference="${lidar_frame}">
+    <visual><laser_retro>${laser_retro}</laser_retro></visual>
   </gazebo>
   <gazebo reference="left_wheel_link">
-    <laserRetro>${laser_retro}</laserRetro>
+    <visual><laser_retro>${laser_retro}</laser_retro></visual>
   </gazebo>
   <gazebo reference="right_wheel_link">
-    <laserRetro>${laser_retro}</laserRetro>
+    <visual><laser_retro>${laser_retro}</laser_retro></visual>
   </gazebo>
   <gazebo reference="caster_link">
-    <laserRetro>${laser_retro}</laserRetro>
+    <visual><laser_retro>${laser_retro}</laser_retro></visual>
   </gazebo>
 
   <!-- ========================================================= -->
