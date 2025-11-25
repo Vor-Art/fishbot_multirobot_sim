@@ -56,14 +56,14 @@ lidar:
   update_rate: 10
   visualize: false
   h_rays:
-    samples: 360
+    samples: 180
     min_angle: -3.14159
     max_angle: 3.14159
     resolution: 0.5
   v_rays:
-    samples: 16
-    min_angle: -0.223599
-    max_angle: 0.561799
+    samples: 32
+    min_angle: -0.3
+    max_angle: 0.3
     resolution: 0.5
   range_min: 0.12
   range_max: 20.0
