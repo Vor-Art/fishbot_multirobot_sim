@@ -53,6 +53,27 @@ services:
     command: >
       bash -lc "ros2 launch fishbot_navigation navigation.launch.py robots:=${FISHBOT_NAV_ROBOTS:-bot1}"
 
+  map_merging:
+    container_name: fishbot_map_merging
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.map_merging
+      args:
+        BASE_IMAGE: fishbot_base:latest
+    depends_on:
+      - base
+    network_mode: host
+    ipc: host
+    tty: true
+    env_file: ./docker/ros.env
+    environment:
+      - FISHBOT_MAP_ROBOTS=${FISHBOT_MAP_ROBOTS:-bot1,bot2,bot3,bot4}
+      - FISHBOT_MAP_CONFIG=${FISHBOT_MAP_CONFIG:-/fishbot_ws/install/share/fishbot_map_merging/config/map_merging.yaml}
+    volumes:
+      - ./src/map_merging/:/fishbot_ws/src/map_merging/
+    command: >
+      bash -lc "ros2 launch fishbot_map_merging map_merging.launch.py robots:=${FISHBOT_MAP_ROBOTS:-bot1,bot2,bot3,bot4} config_file:=${FISHBOT_MAP_CONFIG:-/fishbot_ws/install/share/fishbot_map_merging/config/map_merging.yaml}"
+
   foxglove:
     container_name: fishbot_foxglove
     build:

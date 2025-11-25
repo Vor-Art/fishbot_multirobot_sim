@@ -1,0 +1,8 @@
+# Request flag to optionally clear the internal voxel grid after responding.
+bool clear_after_read
+---
+bool success
+string message
+string[] robot_names
+geometry_msgs/Pose[] poses
+sensor_msgs/PointCloud2 merged_map

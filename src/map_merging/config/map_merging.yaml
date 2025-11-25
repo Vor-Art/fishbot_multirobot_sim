@@ -1,0 +1,14 @@
+/**:
+  ros__parameters:
+    robots: [bot1, bot2, bot3, bot4]
+
+    topics:
+      pose: pose_in_world
+      pointcloud: pointclosd_registered
+
+    world_frame: world
+    voxel_size: 0.15
+
+    # Optional publishing of the merged map for visualization/debugging.
+    publish_topic: merged_map
+    publish_period: 1.0  # seconds, set to 0.0 to disable periodic publishing
