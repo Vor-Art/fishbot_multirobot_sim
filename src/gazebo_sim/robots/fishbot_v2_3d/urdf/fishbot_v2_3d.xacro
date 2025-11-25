@@ -233,6 +233,34 @@
     <axis xyz="0 1 0"/>
   </joint>
 
+  <!-- Second caster for stability -->
+  <link name="caster2_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.57079 0 0"/>
+      <geometry>
+        <sphere radius="${caster_radius}"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.57079 0 0"/>
+      <geometry>
+        <sphere radius="${caster_radius}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="${caster_mass}"/>
+      <inertia ixx="${wheel_inertia}" ixy="0" ixz="0" iyy="${wheel_inertia}" iyz="0" izz="${wheel_inertia}"/>
+    </inertial>
+  </link>
+
+  <!-- Second caster center at caster_radius -> bottom at z = 0 -->
+  <joint name="caster2_joint" type="fixed">
+    <parent link="${base_frame}"/>
+    <child link="caster2_link"/>
+    <origin xyz="-0.06 0.0 ${caster_radius}" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
   <!-- ========================================================= -->
   <!-- GAZEBO PLUGINS / EXTRAS                                   -->
   <!-- ========================================================= -->
@@ -244,6 +272,20 @@
   <gazebo reference="caster_link">
     <mu1 value="0.0"/>
     <mu2 value="0.0"/>
+    <slip1 value="1.0"/>
+    <slip2 value="1.0"/>
+    <kp value="1000000.0"/>
+    <kd value="10.0"/>
+  </gazebo>
+  <gazebo reference="caster2_link">
+    <material>Gazebo/Black</material>
+  </gazebo>
+
+  <gazebo reference="caster2_link">
+    <mu1 value="0.0"/>
+    <mu2 value="0.0"/>
+    <slip1 value="1.0"/>
+    <slip2 value="1.0"/>
     <kp value="1000000.0"/>
     <kd value="10.0"/>
   </gazebo>
@@ -280,6 +322,9 @@
     <visual><laser_retro>${laser_retro}</laser_retro></visual>
   </gazebo>
   <gazebo reference="caster_link">
+    <visual><laser_retro>${laser_retro}</laser_retro></visual>
+  </gazebo>
+  <gazebo reference="caster2_link">
     <visual><laser_retro>${laser_retro}</laser_retro></visual>
   </gazebo>
 

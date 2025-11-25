@@ -14,24 +14,24 @@ robot:
 geometry:
   base:
     cyl_radius: 0.10
-    cyl_length: 0.12
-    mass: 0.2
+    cyl_length: 0.07
+    mass: 0.1
     inertia:
       ixx: 0.0122666
       iyy: 0.0122666
       izz: 0.02
   wheel:
-    radius: 0.0325
+    radius: 0.02
     length: 0.04
-    mass: 0.2
+    mass: 0.3
     inertia_diag: 0.000190416666667
   caster:
     radius: 0.016
-    mass: 0.02
+    mass: 0.03
 
 kinematics:
   wheel_separation: 0.20
-  wheel_diameter: 0.065
+  wheel_diameter: 0.04
 
 plugins:
   diff_drive:
