@@ -1,4 +1,5 @@
 import os
+from math import ceil, cos, pi, sin, sqrt
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -19,11 +20,8 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument('x', default_value='0.0'),
         DeclareLaunchArgument('y', default_value='0.0'),
         DeclareLaunchArgument('z', default_value='0.0'),
-        DeclareLaunchArgument('dx', default_value='0.5'),
-        DeclareLaunchArgument('dy', default_value='0.0'),
-        DeclareLaunchArgument('dz', default_value='0.0'),
-        DeclareLaunchArgument('yaw', default_value='0.0'),
-        DeclareLaunchArgument('yaw_step', default_value='0.0'),
+        DeclareLaunchArgument('pattern', default_value='matrix', description='Spawn pattern: line, matrix, or circle.'),
+        DeclareLaunchArgument('spacing', default_value='1', description='Step size (line/matrix) or radius (circle).'),
         DeclareLaunchArgument('spawn_delay', default_value='5.0', description='Seconds to wait before issuing spawn requests.'),
     ]
 
@@ -36,11 +34,8 @@ def generate_launch_description() -> LaunchDescription:
         base_x = float(LaunchConfiguration('x').perform(context))
         base_y = float(LaunchConfiguration('y').perform(context))
         base_z = float(LaunchConfiguration('z').perform(context))
-        dx = float(LaunchConfiguration('dx').perform(context))
-        dy = float(LaunchConfiguration('dy').perform(context))
-        dz = float(LaunchConfiguration('dz').perform(context))
-        yaw = float(LaunchConfiguration('yaw').perform(context))
-        yaw_step = float(LaunchConfiguration('yaw_step').perform(context))
+        pattern = LaunchConfiguration('pattern').perform(context).lower()
+        spacing = float(LaunchConfiguration('spacing').perform(context))
         spawn_delay = float(LaunchConfiguration('spawn_delay').perform(context))
 
         xacro_path = os.path.join(pkg_share, 'robots', robot, 'urdf', f'{robot}.xacro')
@@ -49,6 +44,27 @@ def generate_launch_description() -> LaunchDescription:
         rsp_nodes = []
         spawn_nodes = []
         bridge_nodes = []
+
+        def pose_for_index(idx: int) -> tuple[float, float, float, float]:
+            """Compute spawn pose per index for the selected pattern."""
+            if pattern == 'circle':
+                angle = (2 * pi * idx / max(count, 1))
+                x = base_x + spacing * cos(angle)
+                y = base_y + spacing * sin(angle)
+                yaw = angle  # face outward
+            elif pattern in ('matrix', 'grid'):
+                cols = max(1, ceil(sqrt(count)))
+                rows = ceil(count / cols)
+                row = idx // cols
+                col = idx % cols
+                x = base_x + spacing * (col - (cols - 1) / 2)
+                y = base_y + spacing * (row - (rows - 1) / 2)
+                yaw = 0.0
+            else:  # line
+                x = base_x + spacing * idx
+                y = base_y
+                yaw = 0.0
+            return x, y, base_z, yaw
 
         tf_bridge = Node(
             package='ros_gz_bridge',
@@ -82,6 +98,8 @@ def generate_launch_description() -> LaunchDescription:
                 )
             )
 
+            spawn_x, spawn_y, spawn_z, spawn_yaw = pose_for_index(i)
+
             spawn_nodes.append(
                 Node(
                     package='ros_gz_sim',
@@ -93,10 +111,10 @@ def generate_launch_description() -> LaunchDescription:
                         '--name', name,
                         '--allow_renaming=false',
                         '--string', robot_description,
-                        '--x', str(base_x + dx * i),
-                        '--y', str(base_y + dy * i),
-                        '--z', str(base_z + dz * i),
-                        '--Y', str(yaw + yaw_step * i),
+                        '--x', str(spawn_x),
+                        '--y', str(spawn_y),
+                        '--z', str(spawn_z),
+                        '--Y', str(spawn_yaw),
                     ],
                 )
             )

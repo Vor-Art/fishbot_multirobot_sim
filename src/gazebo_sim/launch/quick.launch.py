@@ -20,6 +20,10 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument('count', default_value='3'),
         DeclareLaunchArgument('name_prefix', default_value='bot'),
         DeclareLaunchArgument('start_index', default_value='1'),
+        DeclareLaunchArgument('x', default_value='0.0'),
+        DeclareLaunchArgument('y', default_value='0.0'),
+        DeclareLaunchArgument('pattern', default_value='matrix'),
+        DeclareLaunchArgument('spacing', default_value='1'),
     ]
 
     gazebo_launch = IncludeLaunchDescription(
@@ -41,6 +45,10 @@ def generate_launch_description() -> LaunchDescription:
             'count': LaunchConfiguration('count'),
             'name_prefix': LaunchConfiguration('name_prefix'),
             'start_index': LaunchConfiguration('start_index'),
+            'x': LaunchConfiguration('x'),
+            'y': LaunchConfiguration('y'),
+            'pattern': LaunchConfiguration('pattern'),
+            'spacing': LaunchConfiguration('spacing'),
         }.items(),
     )
 
