@@ -1,0 +1,138 @@
+{
+  "configVersion": 1,
+  "name": "Multi-robot Navigation",
+  "layout": {
+    "direction": "horizontal",
+    "splits": [
+      {
+        "direction": "vertical",
+        "splits": [
+          {
+            "direction": "horizontal",
+            "splits": [
+              {
+                "id": "topics",
+                "type": "Topics",
+                "title": "Topics",
+                "config": {
+                  "selectedTopicNames": [
+                    "/clock",
+                    "/{{robot}}/nav_status",
+                    "/{{robot}}/nav_path",
+                    "/{{robot}}/wheel_odom",
+                    "/{{robot}}/lidar_points/points",
+                    "/ui/goal_pose"
+                  ]
+                }
+              },
+              {
+                "id": "selector",
+                "type": "VariableDropdown",
+                "title": "Robot Selector",
+                "config": {
+                  "variableName": "robot",
+                  "options": [
+                    "bot0",
+                    "bot1",
+                    "bot2",
+                    "bot3",
+                    "bot4"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "publish",
+            "type": "Publish",
+            "title": "Send Goal",
+            "config": {
+              "topicName": "/ui/goal_pose",
+              "schemaName": "geometry_msgs/PoseStamped",
+              "value": {
+                "header": {
+                  "frame_id": "odom"
+                },
+                "pose": {
+                  "position": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "orientation": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "w": 1
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "size": 1.5
+      },
+      {
+        "direction": "vertical",
+        "splits": [
+          {
+            "id": "odom",
+            "type": "Plot",
+            "title": "Odom XY",
+            "config": {
+              "paths": [
+                {
+                  "value": "/{{robot}}/wheel_odom.pose.pose.position.x",
+                  "enabled": true
+                },
+                {
+                  "value": "/{{robot}}/wheel_odom.pose.pose.position.y",
+                  "enabled": true
+                }
+              ],
+              "showLegend": true
+            }
+          },
+          {
+            "id": "map",
+            "type": "ThreeDee",
+            "title": "3D",
+            "config": {
+              "topics": {
+                "/{{robot}}/nav_path": {
+                  "visible": true,
+                  "colorMode": {
+                    "mode": "flat",
+                    "color": "#22ffcc"
+                  }
+                },
+                "/{{robot}}/lidar_points/points": {
+                  "visible": true,
+                  "colorMode": {
+                    "mode": "flat",
+                    "color": "#ffffff"
+                  }
+                },
+                "/{{robot}}/wheel_odom": {
+                  "visible": true
+                }
+              },
+              "scene": {
+                "followMode": "frame",
+                "followFrame": "/{{robot}}/base_link",
+                "grid": {
+                  "visible": true
+                }
+              }
+            }
+          }
+        ],
+        "size": 3
+      }
+    ]
+  },
+  "globalVariables": {
+    "robot": "bot0"
+  },
+  "topics": []
+}

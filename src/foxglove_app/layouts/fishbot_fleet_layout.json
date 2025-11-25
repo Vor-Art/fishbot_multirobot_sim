@@ -1,0 +1,85 @@
+{
+  "configById": {
+    "3D!fishslam": {
+      "cameraState": {
+        "distance": 15.0,
+        "perspective": false,
+        "phi": 0.78539816339,
+        "target": [0, 0, 0],
+        "targetOffset": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "thetaOffset": 0,
+        "fovy": 0.78539816339,
+        "near": 0.01,
+        "far": 5000.0
+      },
+      "followTf": "map",
+      "scene": {
+        "labelScaleFactor": 1
+      },
+      "transforms": {
+        "map": {
+          "visible": true
+        }
+      },
+      "layers": {
+        "grid-layer": {
+          "visible": true,
+          "frameLocked": true,
+          "label": "Grid",
+          "instanceId": "grid-layer",
+          "layerId": "foxglove.Grid",
+          "frameId": "map",
+          "divisions": 10,
+          "lineWidth": 0.2,
+          "color": "#ffffff",
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "order": 1,
+          "size": 25
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/ui/goal_pose",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      }
+    },
+    "Plot!odom_x": {
+      "title": "Odom X ($active_robot)",
+      "paths": [
+        {
+          "value": "/$active_robot/wheel_odom.pose.pose.position.x",
+          "enabled": true,
+          "timestampMethod": "receiveTime"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": false,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240
+    }
+  },
+  "globalVariables": {
+    "active_robot": "bot1"
+  },
+  "userNodes": {},
+  "linkedGlobalVariables": [],
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "first": "3D!fishslam",
+    "second": "Plot!odom_x",
+    "direction": "row",
+    "splitPercentage": 70.0
+  }
+}

@@ -1,0 +1,2 @@
+"""Fishbot Foxglove integration package."""
+

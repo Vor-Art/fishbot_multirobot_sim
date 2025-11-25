@@ -52,3 +52,28 @@ services:
       - ./src/navigation/:/fishbot_ws/src/navigation/
     command: >
       bash -lc "ros2 launch fishbot_navigation navigation.launch.py robots:=${FISHBOT_NAV_ROBOTS:-bot1}"
+
+  foxglove:
+    container_name: fishbot_foxglove
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.foxglove
+      args:
+        BASE_IMAGE: fishbot_base:latest
+    depends_on:
+      - base
+    network_mode: host
+    ipc: host
+    tty: true
+    env_file: ./docker/ros.env
+    environment:
+      - FOXGLOVE_PORT=${FOXGLOVE_PORT:-8765}
+      - FOXGLOVE_ADDRESS=${FOXGLOVE_ADDRESS:-0.0.0.0}
+      - FOXGLOVE_ACTIVE_ROBOT=${FOXGLOVE_ACTIVE_ROBOT:-bot1}
+      - FOXGLOVE_GOAL_TOPIC=${FOXGLOVE_GOAL_TOPIC:-move_base/goal}
+      - FOXGLOVE_UI_GOAL_TOPIC=${FOXGLOVE_UI_GOAL_TOPIC:-/ui/goal_pose}
+      - FOXGLOVE_LAYOUT=${FOXGLOVE_LAYOUT:-/fishbot_ws/install/share/fishbot_foxglove/layouts/multi_robot_navigation.json}
+    volumes:
+      - ./src/foxglove_app/:/fishbot_ws/src/foxglove_app/
+    command: >
+      bash -lc "ros2 launch fishbot_foxglove foxglove.launch.py port:=${FOXGLOVE_PORT:-8765} address:=${FOXGLOVE_ADDRESS:-0.0.0.0} active_robot:=${FOXGLOVE_ACTIVE_ROBOT:-bot1} goal_topic:=${FOXGLOVE_GOAL_TOPIC:-move_base/goal} ui_goal_topic:=${FOXGLOVE_UI_GOAL_TOPIC:-/ui/goal_pose} layout:=${FOXGLOVE_LAYOUT:-/fishbot_ws/install/share/fishbot_foxglove/layouts/multi_robot_navigation.json}"
