@@ -36,4 +36,16 @@ Need to spawn robots separately (e.g. against an already running Gazebo world)? 
 ros2 launch gazebo_sim spawn_robots.launch.py robot:=fishbot_v1 count:=1
 ```
 
+## Useful commands (run inside the container)
+
+| Task                                         | Command                                                                                                                                                                                  |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pause simulation                             | `ign service -s /world/default/control --reqtype ignition.msgs.WorldControl --reptype ignition.msgs.Boolean --timeout 3000 --req "pause: true"`                                          |
+| Resume simulation                            | `ign service -s /world/default/control --reqtype ignition.msgs.WorldControl --reptype ignition.msgs.Boolean --timeout 3000 --req "pause: false"`                                         |
+| Advance sim by N milliseconds *(multi-step)* | `ign service -s /world/default/control --reqtype ignition.msgs.WorldControl --reptype ignition.msgs.Boolean --timeout 3000 --req "pause: true multi_step: 1"`                            |
+| Slowdown (×0.5)                              | `ign service -s /world/default/set_physics --reqtype ignition.msgs.Physics --reptype ignition.msgs.Boolean --timeout 3000 --req "max_step_size: 0.0005 real_time_update_rate: 0"`        |
+| Speedup (×2)                                 | `ign service -s /world/default/set_physics --reqtype ignition.msgs.Physics --reptype ignition.msgs.Boolean --timeout 3000 --req "max_step_size: 0.002 real_time_update_rate: 0"`         |
+| Change real-time factor                      | `ign service -s /world/default/set_physics --reqtype ignition.msgs.Physics --reptype ignition.msgs.Boolean --timeout 3000 --req 'profile_name: "default_physics" real_time_factor: 0.5'` |
+
+
 [1]: https://www.livoxtech.com/mid-360
