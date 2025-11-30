@@ -69,11 +69,17 @@ services:
     environment:
       - FOXGLOVE_PORT=${FOXGLOVE_PORT:-8765}
       - FOXGLOVE_ADDRESS=${FOXGLOVE_ADDRESS:-0.0.0.0}
-      - FOXGLOVE_ACTIVE_ROBOT=${FOXGLOVE_ACTIVE_ROBOT:-bot1}
-      - FOXGLOVE_GOAL_TOPIC=${FOXGLOVE_GOAL_TOPIC:-move_base/goal}
-      - FOXGLOVE_UI_GOAL_TOPIC=${FOXGLOVE_UI_GOAL_TOPIC:-/ui/goal_pose}
-      - FOXGLOVE_LAYOUT=${FOXGLOVE_LAYOUT:-/fishbot_ws/install/share/fishbot_foxglove/layouts/multi_robot_navigation.json}
     volumes:
       - ./src/foxglove_app/:/fishbot_ws/src/foxglove_app/
     command: >
-      bash -lc "ros2 launch fishbot_foxglove foxglove.launch.py port:=${FOXGLOVE_PORT:-8765} address:=${FOXGLOVE_ADDRESS:-0.0.0.0} active_robot:=${FOXGLOVE_ACTIVE_ROBOT:-bot1} goal_topic:=${FOXGLOVE_GOAL_TOPIC:-move_base/goal} ui_goal_topic:=${FOXGLOVE_UI_GOAL_TOPIC:-/ui/goal_pose} layout:=${FOXGLOVE_LAYOUT:-/fishbot_ws/install/share/fishbot_foxglove/layouts/multi_robot_navigation.json}"
+      bash -lc "
+        set -e
+        cd /fishbot_ws/src/foxglove_app/scripts
+        python3 ./gen_foxglove_tabs.py --bots bot1 bot2 --out ../layouts/foxglove_multi_robot_tabs.json
+        python3 -m http.server 8000 --directory /fishbot_ws/src/foxglove_app/layouts --bind 0.0.0.0 >/tmp/foxglove_layout_server.log 2>&1 &
+        export FOXGLOVE_OPEN_IN=\${FOXGLOVE_OPEN_IN:-desktop}
+        export FOXGLOVE_LAYOUT_URL=\${FOXGLOVE_LAYOUT_URL:-http://${FOXGLOVE_PUBLIC_HOST:-localhost}:8000/foxglove_multi_robot_tabs.json}
+        python3 ./print_foxglove_link.py
+        cd /fishbot_ws
+        ros2 launch fishbot_foxglove foxglove.launch.py port:=${FOXGLOVE_PORT:-8765} address:=${FOXGLOVE_ADDRESS:-0.0.0.0}
+      "

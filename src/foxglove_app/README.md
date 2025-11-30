@@ -1,64 +1,38 @@
 # Fishbot Foxglove Module
 
-Foxglove-first visualization wrapper that launches `foxglove_bridge` and a
-simple goal router. Set an active robot namespace once and send 2D Nav Goals
-from Foxglove to that robot without spinning up per-robot RViz windows.
+Foxglove - visualization wrapper that launches `foxglove_bridge`.
 
-## Usage
+## Shareable link
 
-```bash
-source /fishbot_ws/install/setup.bash
-ros2 launch fishbot_foxglove foxglove.launch.py \
-  port:=8765 address:=0.0.0.0 active_robot:=bot1
+When you start the `foxglove` compose service, the container prints a Foxglove Studio shareable link, e.g.:
+
+```
+https://app.foxglove.dev/~/view?ds=foxglove-websocket&ds.url=ws://localhost:8765
 ```
 
-### Launch Arguments
-- `port` / `address`: WebSocket endpoint for Foxglove (defaults: 8765 / 0.0.0.0).
-- `active_robot`: initial robot namespace to target (e.g., `bot1`).
-- `goal_topic`: relative goal topic to publish (default: `move_base/goal`).
-- `ui_goal_topic`: topic Foxglove publishes goals to (default: `/ui/goal_pose`).
-- `layout`: optional path to a Foxglove layout JSON (see `share/fishbot_foxglove/layouts`).
+Environment variables you can set before `docker compose up foxglove`:
+- `FOXGLOVE_PUBLIC_HOST`: Hostname or IP to use in the link (default `localhost`).
+- `FOXGLOVE_LAYOUT_ID`: Optional saved layout ID to append to the link.
+- `FOXGLOVE_OPEN_IN`: Set to `desktop` to prompt the desktop app instead of the web app.
 
-### Goal Router
-
-The `goal_router` node subscribes to `/ui/goal_pose` (`PoseStamped`) and
-republishes to `/{active_robot}/{goal_topic}`. Update the active robot at
-runtime:
+You can also generate a link manually from the workspace with:
 
 ```bash
-ros2 param set /goal_router active_robot bot3
+python3 src/foxglove_app/scripts/print_foxglove_link.py
 ```
 
-Connect Foxglove Studio to `ws://<host>:8765` and use the 2D Goal tool on the
-`ui_goal_pose` topic; the router will forward it to the selected robot.
+## Bot namespace selector extension
 
-### Layouts & Robot Selector
+An optional Foxglove Studio extension lives in `src/foxglove_app/extensions/bot_namespace_selector`. It adds:
+- A panel for choosing which `/botX` namespace should be treated as the active robot.
+- Topic aliases to expose `/selected/imu`, `/selected/points`, `/selected/odom`, and `/selected/cmd_vel` for whichever robot you pick.
 
-- Layouts live in `src/foxglove_app/layouts`. A starter layout
-  `multi_robot_navigation.json` includes a `VariableDropdown` to pick the active
-  `robot` (default `bot0`) and uses that variable in topic names, e.g.
-  `/{{robot}}/nav_path`. Load it from Foxglove Studio (File → Open Layout) or
-  pass the path via launch argument: `layout:=/fishbot_ws/install/share/fishbot_foxglove/layouts/multi_robot_navigation.json`.
-- The "Send Goal" publish panel in that layout targets `/ui/goal_pose`; update
-  `active_robot` param on the `goal_router` node to forward goals to the chosen
-  namespace.
-
-### Compose Autolaunch (desktop or browser)
-
-Run `docker/run_foxglove.sh` to bring up the `foxglove` compose service and
-launch a client on the host automatically:
+Build it locally (Node 18+):
 
 ```bash
-# default opens the browser at http://localhost:8765
-./docker/run_foxglove.sh
-
-# force the desktop app if installed: foxglove-studio --open ws://localhost:8765
-FOXGLOVE_CLIENT=desktop ./docker/run_foxglove.sh
-
-# skip autolaunch and only start the container
-FOXGLOVE_CLIENT=none ./docker/run_foxglove.sh
+cd src/foxglove_app/extensions/bot_namespace_selector
+npm install
+npm run build
 ```
 
-The script reads `.env` for `FOXGLOVE_PORT`, `FOXGLOVE_ADDRESS`, and
-`FOXGLOVE_CLIENT` so the same values used by `docker compose up foxglove` drive
-how the host client is opened.
+Then sideload `dist/extension.js` in Foxglove Studio (**Settings → Extensions → Install extension from local file…**) and use the `foxglove_multi_robot_selected` layout. The gauge panel in that layout is replaced by the selector panel and the virtual joystick now publishes to `/selected/cmd_vel`.
