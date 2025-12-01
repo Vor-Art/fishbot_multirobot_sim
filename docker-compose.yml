@@ -75,11 +75,22 @@ services:
       bash -lc "
         set -e
         cd /fishbot_ws/src/foxglove_app/scripts
-        python3 ./gen_foxglove_tabs.py --bots bot1 bot2 --out ../layouts/foxglove_multi_robot_tabs.json
-        python3 -m http.server 8000 --directory /fishbot_ws/src/foxglove_app/layouts --bind 0.0.0.0 >/tmp/foxglove_layout_server.log 2>&1 &
+        python3 ./gen_foxglove_tabs.py --bots bot1 bot2 bot3 bot4 --out ../layouts/foxglove_multi_robot_tabs.json
         export FOXGLOVE_OPEN_IN=\${FOXGLOVE_OPEN_IN:-desktop}
-        export FOXGLOVE_LAYOUT_URL=\${FOXGLOVE_LAYOUT_URL:-http://${FOXGLOVE_PUBLIC_HOST:-localhost}:8000/foxglove_multi_robot_tabs.json}
         python3 ./print_foxglove_link.py
         cd /fishbot_ws
         ros2 launch fishbot_foxglove foxglove.launch.py port:=${FOXGLOVE_PORT:-8765} address:=${FOXGLOVE_ADDRESS:-0.0.0.0}
+      "
+
+  swarm_lio2:
+    extends:
+      file: ./src/Swarm-LIO2-ROS2-Docker/docker/docker-compose.yaml
+      service: swarm_lio2_ros2
+    command: >
+      bash -lc "
+        set -e
+        source /opt/ros/humble/setup.bash
+        source /opt/swarm_lio_ws/install/setup.bash
+        ros2 run swarm_lio global_map_node --ros-args -p root_id:=1 -p uav_ids:='[1,2,3,4]' &
+        ros2 launch swarm_lio simulation.launch.py
       "
