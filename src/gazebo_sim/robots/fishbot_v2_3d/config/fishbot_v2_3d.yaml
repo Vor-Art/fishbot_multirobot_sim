@@ -14,7 +14,7 @@ robot:
 geometry:
   base:
     cyl_radius: 0.10
-    cyl_length: 0.07
+    cyl_length: 0.15
     mass: 0.1
     inertia:
       ixx: 0.0122666

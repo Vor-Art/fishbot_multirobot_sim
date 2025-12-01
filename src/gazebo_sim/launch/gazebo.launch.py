@@ -4,6 +4,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, SetEnvironmentVariable
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
+from launch_ros.actions import Node
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -29,9 +30,18 @@ def generate_launch_description() -> LaunchDescription:
         output='screen'
     )
 
+    # Bridge simulation clock from Ignition/Gazebo into ROS /clock
+    clock_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=['/clock@rosgraph_msgs/msg/Clock@gz.msgs.Clock'],
+        output='screen'
+    )
+
     launch_description = LaunchDescription()
     launch_description.add_action(world_arg)
     launch_description.add_action(SetEnvironmentVariable('IGN_GAZEBO_RESOURCE_PATH', resource_value))
     launch_description.add_action(SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', resource_value))
     launch_description.add_action(start_gazebo_cmd)
+    launch_description.add_action(clock_bridge)
     return launch_description

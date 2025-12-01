@@ -31,27 +31,27 @@ services:
       - ${HOME}/.Xauthority:/root/.Xauthority:ro
       - ./src/gazebo_sim/:/fishbot_ws/src/gazebo_sim/
     command: >
-      bash -lc "ros2 launch gazebo_sim quick.launch.py world:=fishbot2.world pattern:=grid x:=-3 count:=4"
+      bash -lc "ros2 launch gazebo_sim quick.launch.py world:=fishbot2.world pattern:=circle x:=-3 count:=4"
 
-  navigation:
-    container_name: fishbot_navigation
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.navigation
-      args:
-        BASE_IMAGE: fishbot_base:latest
-    depends_on:
-      - base
-    network_mode: host
-    ipc: host
-    tty: true
-    env_file: ./docker/ros.env
-    environment:
-      - FISHBOT_NAV_ROBOTS=${FISHBOT_NAV_ROBOTS:-bot1}
-    volumes:
-      - ./src/navigation/:/fishbot_ws/src/navigation/
-    command: >
-      bash -lc "ros2 launch fishbot_navigation navigation.launch.py robots:=${FISHBOT_NAV_ROBOTS:-bot1}"
+  # navigation:
+  #   container_name: fishbot_navigation
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Dockerfile.navigation
+  #     args:
+  #       BASE_IMAGE: fishbot_base:latest
+  #   depends_on:
+  #     - base
+  #   network_mode: host
+  #   ipc: host
+  #   tty: true
+  #   env_file: ./docker/ros.env
+  #   environment:
+  #     - FISHBOT_NAV_ROBOTS=${FISHBOT_NAV_ROBOTS:-bot1}
+  #   volumes:
+  #     - ./src/navigation/:/fishbot_ws/src/navigation/
+  #   command: >
+  #     bash -lc "ros2 launch fishbot_navigation navigation.launch.py robots:=${FISHBOT_NAV_ROBOTS:-bot1}"
 
   foxglove:
     container_name: fishbot_foxglove
@@ -91,6 +91,6 @@ services:
         set -e
         source /opt/ros/humble/setup.bash
         source /opt/swarm_lio_ws/install/setup.bash
-        ros2 run swarm_lio global_map_node --ros-args -p root_id:=1 -p uav_ids:='[1,2,3,4]' &
-        ros2 launch swarm_lio simulation.launch.py
+        ros2 run swarm_lio global_map_node --ros-args -p use_sim_time:=true -p root_id:=1 -p uav_ids:='[1,2,3,4]' &
+        ros2 launch swarm_lio simulation.launch.py bot_list:=1,2,3,4 rviz_list:=1 use_sim_time:=true
       "
