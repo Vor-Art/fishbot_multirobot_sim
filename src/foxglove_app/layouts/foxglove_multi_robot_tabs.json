@@ -95,12 +95,12 @@
     },
     "3D!bot1": {
       "followMode": "follow-pose",
-      "followTf": "bot1/odom",
+      "followTf": "bot1/world",
       "scene": {
         "backgroundColor": "#282828",
         "syncCamera": false,
         "transforms": {
-          "labelSize": 0.1,
+          "labelSize": 0.07,
           "axisSize": 0.1,
           "lineWidth": 2,
           "editable": false,
@@ -148,7 +148,7 @@
         "frame:bot1/lidar_link": {
           "visible": false
         },
-        "frame:bot1/odom": {
+        "frame:bot1/world": {
           "visible": true
         }
       },
@@ -173,7 +173,7 @@
           "label": "Grid",
           "instanceId": "bot1-grid",
           "layerId": "foxglove.Grid",
-          "frameId": "bot1/odom",
+          "frameId": "map_origin",
           "size": 10,
           "divisions": 10,
           "lineWidth": 1,
@@ -295,12 +295,12 @@
     },
     "3D!bot2": {
       "followMode": "follow-pose",
-      "followTf": "bot2/odom",
+      "followTf": "bot2/world",
       "scene": {
         "backgroundColor": "#282828",
         "syncCamera": false,
         "transforms": {
-          "labelSize": 0.1,
+          "labelSize": 0.07,
           "axisSize": 0.1,
           "lineWidth": 2,
           "editable": false,
@@ -348,7 +348,7 @@
         "frame:bot2/lidar_link": {
           "visible": false
         },
-        "frame:bot2/odom": {
+        "frame:bot2/world": {
           "visible": true
         }
       },
@@ -373,7 +373,7 @@
           "label": "Grid",
           "instanceId": "bot2-grid",
           "layerId": "foxglove.Grid",
-          "frameId": "bot2/odom",
+          "frameId": "map_origin",
           "size": 10,
           "divisions": 10,
           "lineWidth": 1,
@@ -495,12 +495,12 @@
     },
     "3D!bot3": {
       "followMode": "follow-pose",
-      "followTf": "bot3/odom",
+      "followTf": "bot3/world",
       "scene": {
         "backgroundColor": "#282828",
         "syncCamera": false,
         "transforms": {
-          "labelSize": 0.1,
+          "labelSize": 0.07,
           "axisSize": 0.1,
           "lineWidth": 2,
           "editable": false,
@@ -548,7 +548,7 @@
         "frame:bot3/lidar_link": {
           "visible": false
         },
-        "frame:bot3/odom": {
+        "frame:bot3/world": {
           "visible": true
         }
       },
@@ -573,7 +573,7 @@
           "label": "Grid",
           "instanceId": "bot3-grid",
           "layerId": "foxglove.Grid",
-          "frameId": "bot3/odom",
+          "frameId": "map_origin",
           "size": 10,
           "divisions": 10,
           "lineWidth": 1,
@@ -695,12 +695,12 @@
     },
     "3D!bot4": {
       "followMode": "follow-pose",
-      "followTf": "bot4/odom",
+      "followTf": "bot4/world",
       "scene": {
         "backgroundColor": "#282828",
         "syncCamera": false,
         "transforms": {
-          "labelSize": 0.1,
+          "labelSize": 0.07,
           "axisSize": 0.1,
           "lineWidth": 2,
           "editable": false,
@@ -748,7 +748,7 @@
         "frame:bot4/lidar_link": {
           "visible": false
         },
-        "frame:bot4/odom": {
+        "frame:bot4/world": {
           "visible": true
         }
       },
@@ -773,7 +773,7 @@
           "label": "Grid",
           "instanceId": "bot4-grid",
           "layerId": "foxglove.Grid",
-          "frameId": "bot4/odom",
+          "frameId": "map_origin",
           "size": 10,
           "divisions": 10,
           "lineWidth": 1,

@@ -24,12 +24,12 @@
   "panels": {
     "3D!{{BOT}}": {
       "followMode": "follow-pose",
-      "followTf": "{{BOT}}/odom",
+      "followTf": "{{BOT}}/world",
       "scene": {
         "backgroundColor": "#282828",
         "syncCamera": false,
         "transforms": {
-          "labelSize": 0.10,
+          "labelSize": 0.07,
           "axisSize": 0.1,
           "lineWidth": 2,
           "editable": false,
@@ -54,7 +54,7 @@
         "frame:{{BOT}}/base_link": { "visible": false },
         "frame:{{BOT}}/imu_link": { "visible": true },
         "frame:{{BOT}}/lidar_link": { "visible": false },
-        "frame:{{BOT}}/odom": { "visible": true }
+        "frame:{{BOT}}/world": { "visible": true }
       },
       "topics": {
         "/{{BOT}}/lidar_points/points": {
@@ -74,7 +74,7 @@
           "label": "Grid",
           "instanceId": "{{BOT}}-grid",
           "layerId": "foxglove.Grid",
-          "frameId": "{{BOT}}/odom",
+          "frameId": "map_origin",
           "size": 10,
           "divisions": 10,
           "lineWidth": 1,

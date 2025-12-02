@@ -77,9 +77,10 @@
     <magnetic_field>6e-06 2.3e-05 -4.2e-05</magnetic_field>
     <atmosphere type='adiabatic'/>
     <physics type='ode'>
-      <max_step_size>0.001</max_step_size>
+      <!-- Lighter physics: larger step and lower update rate to reduce CPU -->
+      <max_step_size>0.004</max_step_size>
       <real_time_factor>1</real_time_factor>
-      <real_time_update_rate>1000</real_time_update_rate>
+      <real_time_update_rate>250</real_time_update_rate>
     </physics>
     <plugin filename="ignition-gazebo-physics-system" name="gz::sim::systems::Physics"/>
     <plugin filename="ignition-gazebo-sensors-system" name="gz::sim::systems::Sensors">
