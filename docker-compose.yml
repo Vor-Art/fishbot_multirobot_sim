@@ -88,9 +88,26 @@ services:
       service: swarm_lio2_ros2
     command: >
       bash -lc "
-        set -e
         source /opt/ros/humble/setup.bash
         source /opt/swarm_lio_ws/install/setup.bash
-        ros2 run swarm_lio global_map_node --ros-args -p use_sim_time:=true -p root_id:=1 -p uav_ids:='[1,2,3,4]' &
         ros2 launch swarm_lio simulation.launch.py bot_list:=1,2,3,4 rviz_list:=1 use_sim_time:=true
       "
+
+  map_fusion:
+    container_name: map_fusion
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.map_fusion
+      args:
+        BASE_IMAGE: fishbot_base:latest
+    depends_on:
+      - base
+    ipc: host
+    tty: true
+    privileged: true
+    network_mode: host
+    env_file: ./docker/ros.env
+    volumes:
+      - ./src/map_fusion/:/fishbot_ws/src/map_fusion/
+    command: >
+      bash -lc "ros2 launch map_fusion map_fusion.launch.py root_id:=1 uav_ids:=1,2,3,4 use_sim_time:=true"
