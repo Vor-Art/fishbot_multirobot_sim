@@ -58,6 +58,11 @@
   <xacro:property name="wheel_diameter" value="${kin_cfg['wheel_diameter']}"/>
   <xacro:property name="diff_drive_cfg"   value="${plugins_cfg['diff_drive']}"/>
   <xacro:property name="diff_update_rate" value="${diff_drive_cfg['update_rate']}"/>
+  <xacro:property name="diff_publish_odom_bool" value="${bool(diff_drive_cfg.get('publish_odom', True))}"/>
+  <xacro:property name="diff_publish_tf_bool"   value="${bool(diff_drive_cfg.get('publish_odom_tf', True))}"/>
+  <xacro:property name="diff_publish_odom" value="${'true' if diff_publish_odom_bool else 'false'}"/>
+  <xacro:property name="diff_publish_tf"   value="${'true' if diff_publish_tf_bool else 'false'}"/>
+  <xacro:property name="diff_tf_topic"     value="${'/tf' if diff_publish_tf_bool else '/tf_disabled'}"/>
 
   <!-- Laser retro from config -->
   <xacro:property name="laser_retro" value="${robot_cfg.get('laser_retro', 0.0)}"/>
@@ -260,9 +265,11 @@
       <wheel_radius>${wheel_diameter * 0.5}</wheel_radius>
       <topic>${cmd_vel_topic}</topic>
       <odom_topic>${odom_topic}</odom_topic>
-      <tf_topic>/tf</tf_topic>
-      <frame_id>${odom_frame_prefixed}</frame_id>
-      <child_frame_id>${base_frame_prefixed}</child_frame_id>
+      <tf_topic>${diff_tf_topic}</tf_topic>
+      <odom_frame>${odom_frame_prefixed}</odom_frame>
+      <robot_base_frame>${base_frame_prefixed}</robot_base_frame>
+      <publish_odom>${diff_publish_odom}</publish_odom>
+      <publish_tf>${diff_publish_tf}</publish_tf>
     </plugin>
   </gazebo>
 

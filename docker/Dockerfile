@@ -15,3 +15,7 @@ RUN apt-get update \
 
 # DO NOT CLEAR THE `rm -rf /var/lib/apt/lists/*`
 # it leads to the errors in rosdep install
+
+# Source ROS and workspace by default
+RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+RUN echo "source $COLCON_WS/install/setup.bash" >> ~/.bashrc

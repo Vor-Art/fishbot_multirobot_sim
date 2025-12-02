@@ -38,7 +38,7 @@ plugins:
     update_rate: 30
     max_wheel_torque: 20.0
     max_wheel_accel: 1.0
-    publish_odom: false
+    publish_odom: true
     publish_odom_tf: false
 
 imu:
