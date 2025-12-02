@@ -34,6 +34,20 @@ def _launch_setup(context, *args, **kwargs):
         }],
     )
 
+    global_pose_node = Node(
+        package="map_fusion",
+        executable="global_pose_publisher.py",
+        name="global_pose_publisher",
+        output="screen",
+        parameters=[{
+            "use_sim_time": use_sim_time,
+            "global_frame": "map_origin",   # map_origin -> bot<i>/base_link
+            "bot_prefix": "bot",            # matches bot1/..., bot2/...
+            "publish_rate_hz": 10.0,
+            "pose_topic_suffix": "global_pose",
+        }],
+    )
+
     # # 2) NVBlox ESDF server node
     # # Choose package name according to what you have installed:
     # #   - "isaac_ros_nvblox"  (Isaac ROS)
@@ -57,7 +71,7 @@ def _launch_setup(context, *args, **kwargs):
     #     ],
     # )
 
-    return [map_fusion_node]
+    return [map_fusion_node, global_pose_node]
     # return [map_fusion_node, esdf_node]
 
 
