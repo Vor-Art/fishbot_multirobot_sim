@@ -6,6 +6,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from rclpy.exceptions import ParameterAlreadyDeclaredException
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from std_msgs.msg import Header
 from sensor_msgs.msg import PointCloud2, PointField
@@ -33,20 +34,24 @@ class MapFusionNode(Node):
     def __init__(self) -> None:
         super().__init__('global_map_node')
 
-        self.declare_parameter('use_sim_time', True)
+        # use_sim_time may already be declared by launch parameters; ignore if so
+        try:
+            self.declare_parameter('use_sim_time', True)
+        except ParameterAlreadyDeclaredException:
+            pass
         self.declare_parameter('uav_ids', [1, 2, 3, 4])
 
         # TF naming to match your TF-only publisher
         self.declare_parameter('origin_frame_id', 'map_origin')   # parent
         self.declare_parameter('robot_prefix', 'bot')             # botX
         self.declare_parameter('robot_frame_suffix', 'world')     # botX/world
+        self.declare_parameter('pointcloud_topic', '/global_downsampled_map')
 
         self.uav_ids: List[int] = [int(x) for x in self.get_parameter('uav_ids').value]
         self.origin_frame_id: str = str(self.get_parameter('origin_frame_id').value).lstrip('/')
         self.robot_prefix: str = str(self.get_parameter('robot_prefix').value)
         self.robot_frame_suffix: str = str(self.get_parameter('robot_frame_suffix').value).lstrip('/')
-
-        self.root_frame_id = self.origin_frame_id  # merged map frame
+        self.pointcloud_topic: str = str(self.get_parameter('pointcloud_topic').value)
 
         qos_map = QoSProfile(
             depth=10,
@@ -75,12 +80,13 @@ class MapFusionNode(Node):
                 )
             )
 
-        self.global_pub = self.create_publisher(PointCloud2, '/global_downsampled_map', qos_default)
+        self.global_pub = self.create_publisher(PointCloud2, self.pointcloud_topic, qos_default)
         self.create_timer(0.5, self._publish_global_map)
 
         self.get_logger().info(
             f'global_map_node TF-fusion started. uav_ids={self.uav_ids}, '
-            f'global_frame={self.root_frame_id}, tf children=/{self.robot_prefix}X/{self.robot_frame_suffix}'
+            f'global_frame={self.origin_frame_id}, pointcloud_topic={self.pointcloud_topic}, '
+            f'tf children=/{self.robot_prefix}X/{self.robot_frame_suffix}'
         )
 
     def _map_callback(self, uid: int, msg: PointCloud2) -> None:
@@ -146,7 +152,7 @@ class MapFusionNode(Node):
 
         header = Header()
         header.stamp = self.get_clock().now().to_msg()
-        header.frame_id = self.root_frame_id
+        header.frame_id = self.origin_frame_id
         cloud = pc2.create_cloud(header, fields, merged_pts)
         self.global_pub.publish(cloud)
 

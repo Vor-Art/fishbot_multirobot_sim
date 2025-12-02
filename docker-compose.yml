@@ -105,6 +105,16 @@ services:
     ipc: host
     tty: true
     privileged: true
+    runtime: nvidia
+    gpus: all
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
     network_mode: host
     env_file: ./docker/ros.env
     volumes:
