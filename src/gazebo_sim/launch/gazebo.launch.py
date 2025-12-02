@@ -30,12 +30,14 @@ def generate_launch_description() -> LaunchDescription:
         output='screen'
     )
 
-    # Bridge simulation clock from Ignition/Gazebo into ROS /clock
+    # Bridge simulation clock from the world topic into ROS /clock
     clock_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        arguments=['/clock@rosgraph_msgs/msg/Clock@gz.msgs.Clock'],
-        output='screen'
+        # Gazebo publishes the clock on /world/<name>/clock; remap it to /clock for ROS
+        arguments=['/world/default/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'],
+        remappings=[('/world/default/clock', '/clock')],
+        output='screen',
     )
 
     launch_description = LaunchDescription()
