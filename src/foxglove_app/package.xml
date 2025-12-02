@@ -4,7 +4,7 @@
   <name>fishbot_foxglove</name>
   <version>0.1.0</version>
   <description>Foxglove-centric visualization and goal routing for Fishbot multi-robot demos.</description>
-  <maintainer email="fishbot@example.com">Fishbot Team</maintainer>
+  <maintainer email="artem.voronov@skoltech.ru">Artem Voronov</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

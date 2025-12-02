@@ -4,7 +4,7 @@
   <name>fishbot_navigation</name>
   <version>0.1.0</version>
   <description>Per-robot navigation nodes that accept RViz goals and drive Fishbot agents.</description>
-  <maintainer email="fishbot@example.com">Fishbot Team</maintainer>
+  <maintainer email="artem.voronov@skoltech.ru">Artem Voronov</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
