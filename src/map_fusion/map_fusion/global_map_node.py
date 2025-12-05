@@ -67,10 +67,10 @@ class MapFusionNode(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # Subscriptions to each quad's downsampled map
+        # Subscriptions to each bot's downsampled map
         self.map_subs = []
         for uid in self.uav_ids:
-            topic = f'/quad{uid}/downsampled_map'
+            topic = f'/bot{uid}/downsampled_map'
             self.map_subs.append(
                 self.create_subscription(
                     PointCloud2,
@@ -90,9 +90,26 @@ class MapFusionNode(Node):
         )
 
     def _map_callback(self, uid: int, msg: PointCloud2) -> None:
-        pts = np.array(list(pc2.read_points(msg, field_names=('x', 'y', 'z'), skip_nans=True)))
+        pts = self._extract_xyz(msg)
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         self.local_maps[uid] = (pts, stamp)
+
+    def _extract_xyz(self, msg: PointCloud2) -> np.ndarray:
+        """Return Nx3 float32 array of xyz points; be robust to malformed input."""
+        try:
+            raw = np.fromiter(
+                pc2.read_points(msg, field_names=('x', 'y', 'z'), skip_nans=True),
+                dtype=[('x', np.float32), ('y', np.float32), ('z', np.float32)],
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            self.get_logger().warn(f"Failed to parse PointCloud2: {exc}")
+            return np.empty((0, 3), dtype=np.float32)
+
+        if raw.size == 0:
+            return np.empty((0, 3), dtype=np.float32)
+
+        pts = np.stack((raw['x'], raw['y'], raw['z']), axis=1).astype(np.float32, copy=False)
+        return pts
 
     def _child_frame(self, uid: int) -> str:
         return f'{self.robot_prefix}{uid}/{self.robot_frame_suffix}'.lstrip('/')
