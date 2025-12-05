@@ -67,10 +67,10 @@ class MapFusionNode(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # Subscriptions to each quad's downsampled map
+        # Subscriptions to each bot's downsampled map
         self.map_subs = []
         for uid in self.uav_ids:
-            topic = f'/quad{uid}/downsampled_map'
+            topic = f'/bot{uid}/downsampled_map'
             self.map_subs.append(
                 self.create_subscription(
                     PointCloud2,

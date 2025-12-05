@@ -24,6 +24,13 @@ Multi-robot simulation stack for testing lidar-inertial SLAM, map fusion, and na
 - **Navigation** *TODO*.
 - **Exploration** *TODO*.
 
+### Interfaces for autonomous exploration
+
+- Control input: `/bot*/cmd_vel` (geometry_msgs/Twist) per robot namespace.
+- Shared map: `/global_downsampled_map` (sensor_msgs/PointCloud2) fused from all agents.
+- Global poses: `/bot*/global_pose` (geometry_msgs/PoseStamped) relative to `map_origin` for localization.
+- ESDF: generation/publishing is not finished yet.  <!-- <fill in when ESDF is available> -->
+
 ## Repository structure
 
 - `docker/` – Dockerfiles per module, shared entrypoint, and `ros.env` for ROS domain/implementation.
@@ -41,6 +48,8 @@ Multi-robot simulation stack for testing lidar-inertial SLAM, map fusion, and na
 - NVIDIA GPU with drivers + `nvidia-container-toolkit` (Gazebo, Swarm-LIO2, and map fusion use `runtime: nvidia`/`gpus: all`).
 
 ## Quick start (everything via Docker)
+
+![Simulation demo](doc/imgs/simulator_demo.gif)
 
 1. Build images (base + modules):
 
@@ -77,6 +86,7 @@ Multi-robot simulation stack for testing lidar-inertial SLAM, map fusion, and na
 ## How to initialize SLAM
 
 Goal: move one agent until all others initialize.
+Note: wait about 10 seconds to IMU initialization for SLAM, before moving.
 
 - **Step 1:** enter the Gazebo container shell.
 
