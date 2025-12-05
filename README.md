@@ -57,6 +57,13 @@ cd fishbot_multirobot_sim
 git submodule update --init --recursive
 ```
 
+Note: Right now you need to manually switch SLAM submodule branch to actual for this project:
+
+```
+cd src/Swarm-LIO2-ROS2-Docker
+git checkout ros2_testing_2d_extrinsics
+```
+
 ## Quick start (everything via Docker)
 
 ![Simulation demo](doc/imgs/simulator_demo.gif)
