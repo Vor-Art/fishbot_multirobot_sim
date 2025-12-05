@@ -47,6 +47,16 @@ Multi-robot simulation stack for testing lidar-inertial SLAM, map fusion, and na
 - **Docker** + **docker compose v2**.
 - NVIDIA GPU with drivers + `nvidia-container-toolkit` (Gazebo, Swarm-LIO2, and map fusion use `runtime: nvidia`/`gpus: all`).
 
+## Clone the repo (with submodules)
+
+```bash
+git clone --recursive https://github.com/Vor-Art/fishbot_multirobot_sim.git
+cd fishbot_multirobot_sim
+
+# If you forget --recursive:
+git submodule update --init --recursive
+```
+
 ## Quick start (everything via Docker)
 
 ![Simulation demo](doc/imgs/simulator_demo.gif)
