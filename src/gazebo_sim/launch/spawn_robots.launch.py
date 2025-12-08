@@ -44,6 +44,7 @@ def generate_launch_description() -> LaunchDescription:
         rsp_nodes = []
         spawn_nodes = []
         bridge_nodes = []
+        helper_nodes = []
 
         def pose_for_index(idx: int) -> tuple[float, float, float, float]:
             """Compute spawn pose per index for the selected pattern."""
@@ -69,10 +70,10 @@ def generate_launch_description() -> LaunchDescription:
         tf_bridge = Node(
             package='ros_gz_bridge',
             executable='parameter_bridge',
-            name='tf_bridge',
+            name='world_pose_bridge',
             output='screen',
             arguments=[
-                '/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
+                f'/world/{world_name}/pose/info@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
             ],
         )
         bridge_nodes.append(tf_bridge)
@@ -134,11 +135,31 @@ def generate_launch_description() -> LaunchDescription:
                 )
             )
 
+        robot_ids = list(range(start_index, start_index + count))
+        if robot_ids:
+            helper_nodes.append(
+                Node(
+                    package='gazebo_sim',
+                    executable='gt_ground_truth_odom.py',
+                    name='gt_ground_truth_odom',
+                    output='screen',
+                    parameters=[{
+                        'use_sim_time': True,
+                        'robot_ids': robot_ids,
+                        'robot_prefix': name_prefix,
+                        'base_frame': 'base_link',
+                        'world_frame': world_name,
+                        'odom_suffix': '/gt/odom',
+                        'tf_topic': f'/world/{world_name}/pose/info',
+                    }],
+                )
+            )
+
         if not rsp_nodes:
             return []
 
         spawn_after_delay = TimerAction(period=spawn_delay, actions=spawn_nodes)
-        return rsp_nodes + bridge_nodes + [spawn_after_delay]
+        return rsp_nodes + bridge_nodes + helper_nodes + [spawn_after_delay]
 
     ld = LaunchDescription()
     for action in declare_args:

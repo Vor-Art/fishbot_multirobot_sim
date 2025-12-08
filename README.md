@@ -155,6 +155,4 @@ Note: wait about 10 seconds to IMU initialization for SLAM, before moving.
 
 ## TODOs
 
-- Create a parametrized launch file to launch simulation with N agents easily.
-- Simplify SLAM initialization steps and document best practices.
-- Provide the way to slow down gazebo
+- Fix problems with many agents 
