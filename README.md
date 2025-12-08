@@ -115,7 +115,24 @@ git checkout ros2_testing_2d_extrinsics
   FISHBOT_AGENT_COUNT=2 docker compose up swarm_lio2
   ```
 
-**Note:** That the compiled maximum swarm size set in `src/Swarm-LIO2-ROS2-Docker/src/swarm_lio/include/common_lib.h` as `MAX_DRONE_ID` (currently 20). Increasing it enlarges the EKF state (`DIM_STATE`) and can add significant compute/memory cost, keep it only as high as you need.
+**Note:** The compiled maximum swarm size is set in `src/Swarm-LIO2-ROS2-Docker/src/swarm_lio/include/common_lib.h` as `MAX_DRONE_ID` (currently 20). Increasing it enlarges the EKF state (`DIM_STATE`) and can add significant compute/memory cost, keep it only as high as you need.
+
+## Slowing down simulation time
+
+- **Why:** when many agents run individual SLAM pipelines, processing a frame can exceed the nominal Gazebo frame period. Slowing sim time keeps `/clock` behind wall time so SLAM nodes have enough compute to stay in sync.
+
+- Set `FISHBOT_SIM_TIME_SCALE` in `.env` to scale Gazebo’s real-time factor/update rate (e.g., `0.5` runs sim time at half speed to give per-robot SLAM more CPU headroom):
+
+  ```bash
+  # .env
+  FISHBOT_SIM_TIME_SCALE=0.5
+  ```
+
+- Override per shell if you want to experiment:
+
+  ```bash
+  FISHBOT_SIM_TIME_SCALE=0.25 docker compose up gazebo
+  ```
 
 ## How to initialize SLAM
 
