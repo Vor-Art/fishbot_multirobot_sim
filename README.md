@@ -88,8 +88,8 @@ git checkout ros2_testing_2d_extrinsics
    docker compose up gazebo swarm_lio2 map_fusion foxglove
    ```
 
-   - Gazebo: spawns 4 robots on a circle (`bot1..bot4`).
-   - Swarm-LIO2: runs its simulation launch file with `bot_list:=1,2,3,4`.
+   - Gazebo: spawns `FISHBOT_AGENT_COUNT` robots on a circle (defaults to 4, names `bot1..botN`).
+   - Swarm-LIO2: runs its simulation launch file with `bot_count:=FISHBOT_AGENT_COUNT`.
    - Map fusion: outputs `/global_downsampled_map` and `/bot*/global_pose`.
    - Foxglove: launches server on `ws://localhost:8765`.
 
@@ -99,6 +99,23 @@ git checkout ros2_testing_2d_extrinsics
    docker exec -it fishbot_gazebo bash
    ros2 topic list
    ```
+
+## Configuring number of agents
+
+- Edit the top-level `.env` (auto-read by Docker Compose) to set the swarm size once:
+
+  ```bash
+  # .env
+  FISHBOT_AGENT_COUNT=6   # spawns bot1..bot6 in Gazebo, SLAM, and Foxglove
+  ```
+
+- You can override per shell if needed:
+
+  ```bash
+  FISHBOT_AGENT_COUNT=2 docker compose up swarm_lio2
+  ```
+
+**Note:** That the compiled maximum swarm size set in `src/Swarm-LIO2-ROS2-Docker/src/swarm_lio/include/common_lib.h` as `MAX_DRONE_ID` (currently 20). Increasing it enlarges the EKF state (`DIM_STATE`) and can add significant compute/memory cost, keep it only as high as you need.
 
 ## How to initialize SLAM
 
@@ -123,3 +140,4 @@ Note: wait about 10 seconds to IMU initialization for SLAM, before moving.
 
 - Create a parametrized launch file to launch simulation with N agents easily.
 - Simplify SLAM initialization steps and document best practices.
+- Provide the way to slow down gazebo

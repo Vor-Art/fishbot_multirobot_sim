@@ -31,7 +31,7 @@ services:
       - ${HOME}/.Xauthority:/root/.Xauthority:ro
       - ./src/gazebo_sim/:/fishbot_ws/src/gazebo_sim/
     command: >
-      bash -lc "ros2 launch gazebo_sim quick.launch.py world:=fishbot2.world pattern:=circle x:=-3 count:=4"
+      bash -lc "ros2 launch gazebo_sim quick.launch.py world:=fishbot2.world pattern:=circle x:=-3 count:=${FISHBOT_AGENT_COUNT:-4}"
 
   # navigation:
   #   container_name: fishbot_navigation
@@ -90,7 +90,7 @@ services:
       bash -lc "
         source /opt/ros/humble/setup.bash
         source /opt/swarm_lio_ws/install/setup.bash
-        ros2 launch swarm_lio simulation.launch.py bot_list:=1,2,3,4 rviz_list:=1 use_sim_time:=true
+        ros2 launch swarm_lio simulation.launch.py bot_count:=${FISHBOT_AGENT_COUNT:-4} rviz_list:=1 use_sim_time:=true
       "
 
   map_fusion:
