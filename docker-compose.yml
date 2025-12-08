@@ -105,19 +105,40 @@ services:
     ipc: host
     tty: true
     privileged: true
-    runtime: nvidia
-    gpus: all
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
     network_mode: host
     env_file: ./docker/ros.env
     volumes:
       - ./src/map_fusion/:/fishbot_ws/src/map_fusion/
     command: >
-      bash -lc "ros2 launch map_fusion map_fusion.launch.py root_id:=1 uav_ids:=1,2,3,4 use_sim_time:=true"
+      bash -lc "ros2 launch map_fusion map_fusion.launch.py use_sim_time:=true"
+  
+  
+  
+  # map_fusion:
+  #   container_name: map_fusion
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Dockerfile.map_fusion
+  #     args:
+  #       BASE_IMAGE: fishbot_base:latest
+  #   depends_on:
+  #     - base
+  #   ipc: host
+  #   tty: true
+  #   privileged: true
+  #   runtime: nvidia
+  #   gpus: all
+  #   environment:
+  #     - NVIDIA_VISIBLE_DEVICES=all
+  #     - NVIDIA_DRIVER_CAPABILITIES=all
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - capabilities: [gpu]
+  #   network_mode: host
+  #   env_file: ./docker/ros.env
+  #   volumes:
+  #     - ./src/map_fusion/:/fishbot_ws/src/map_fusion/
+  #   command: >
+  #     bash -lc "ros2 launch map_fusion map_fusion.launch.py use_sim_time:=true"

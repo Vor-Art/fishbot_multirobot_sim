@@ -32,9 +32,5 @@ RUN source /opt/ros/humble/setup.bash \
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Source ROS and workspace by default
-RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
-RUN echo "source /fishbot_ws/install/setup.bash" >> ~/.bashrc
-
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["bash"]

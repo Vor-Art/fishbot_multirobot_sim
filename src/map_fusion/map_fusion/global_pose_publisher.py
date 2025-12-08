@@ -39,11 +39,13 @@ class MultiBotGlobalPose(Node):
             pass
         self.declare_parameter("global_frame", "map_origin")
         self.declare_parameter("bot_prefix", "bot")
+        self.declare_parameter("bot_frame", "base_link")
         self.declare_parameter("publish_rate_hz", 10.0)
         self.declare_parameter("pose_topic_suffix", "global_pose")
 
         self.global_frame: str = str(self.get_parameter("global_frame").value).lstrip("/")
         self.bot_prefix: str = str(self.get_parameter("bot_prefix").value)
+        self.bot_frame: str = str(self.get_parameter("bot_frame").value)
         self.pose_topic_suffix: str = str(self.get_parameter("pose_topic_suffix").value)
         rate_hz: float = float(self.get_parameter("publish_rate_hz").value)
 
@@ -76,7 +78,7 @@ class MultiBotGlobalPose(Node):
 
         self.get_logger().info(
             f"Publishing global poses in '{self.global_frame}' for discovered frames like "
-            f"'{self.bot_prefix}<id>/base_link'."
+            f"'{self.bot_prefix}<id>/{self.bot_frame}'."
         )
 
     def _bot_id_from_frame(self, frame_id: str) -> Optional[int]:
@@ -88,7 +90,7 @@ class MultiBotGlobalPose(Node):
         if bot_id is None or bot_id in self._bots:
             return
 
-        base_frame = f"{self.bot_prefix}{bot_id}/base_link"
+        base_frame = f"{self.bot_prefix}{bot_id}/{self.bot_frame}"
         topic = f"{self.bot_prefix}{bot_id}/{self.pose_topic_suffix}"
 
         pub = self.create_publisher(PoseStamped, topic, 10)

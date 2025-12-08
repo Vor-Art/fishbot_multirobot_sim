@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+import re
+from dataclasses import dataclass
+from typing import Dict, Tuple
 
 import numpy as np
 import rclpy
@@ -12,8 +14,18 @@ from std_msgs.msg import Header
 from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs_py import point_cloud2 as pc2
 
+from tf2_msgs.msg import TFMessage
+
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
+
+
+@dataclass
+class BotSub:
+    bot_id: int
+    cloud_topic: str
+    base_frame: str
+    sub: any
 
 
 def quat_to_rot_matrix(x: float, y: float, z: float, w: float) -> np.ndarray:
@@ -39,19 +51,25 @@ class MapFusionNode(Node):
             self.declare_parameter('use_sim_time', True)
         except ParameterAlreadyDeclaredException:
             pass
-        self.declare_parameter('uav_ids', [1, 2, 3, 4])
 
-        # TF naming to match your TF-only publisher
-        self.declare_parameter('origin_frame_id', 'map_origin')   # parent
-        self.declare_parameter('robot_prefix', 'bot')             # botX
-        self.declare_parameter('robot_frame_suffix', 'world')     # botX/world
-        self.declare_parameter('pointcloud_topic', '/global_downsampled_map')
+        self.declare_parameter('bot_prefix', 'bot')
+        self.declare_parameter('bot_cloud_topic', '/cloud_registered')
+        self.declare_parameter('bot_cloud_frame', 'world')
+        self.declare_parameter('publish_rate_hz', 0.5)
+        self.declare_parameter('combined_map_topic', '/global_downsampled_map')
+        self.declare_parameter('origin_frame', 'map_origin')
+        self.declare_parameter('voxel_leaf_size', 0.1)
 
-        self.uav_ids: List[int] = [int(x) for x in self.get_parameter('uav_ids').value]
-        self.origin_frame_id: str = str(self.get_parameter('origin_frame_id').value).lstrip('/')
-        self.robot_prefix: str = str(self.get_parameter('robot_prefix').value)
-        self.robot_frame_suffix: str = str(self.get_parameter('robot_frame_suffix').value).lstrip('/')
-        self.pointcloud_topic: str = str(self.get_parameter('pointcloud_topic').value)
+        self.bot_prefix: str = str(self.get_parameter('bot_prefix').value)
+        self.bot_cloud_topic: str = str(self.get_parameter('bot_cloud_topic').value).lstrip('/')
+        self.bot_cloud_frame: str = str(self.get_parameter('bot_cloud_frame').value).lstrip('/')
+        self.origin_frame_id: str = str(self.get_parameter('origin_frame').value).lstrip('/')
+        self.combined_map_topic: str = str(self.get_parameter('combined_map_topic').value)
+        rate_hz: float = float(self.get_parameter('publish_rate_hz').value)
+        self.voxel_size: float = float(self.get_parameter('voxel_leaf_size').value)
+
+        self._bot_re = re.compile(rf"(?:^|/){re.escape(self.bot_prefix)}(\d+)(?:/|$)")
+        self._bots: Dict[int, BotSub] = {}
 
         qos_map = QoSProfile(
             depth=10,
@@ -60,39 +78,83 @@ class MapFusionNode(Node):
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
         )
         qos_default = QoSProfile(depth=10)
+        qos_tf = QoSProfile(
+            depth=100,
+            history=HistoryPolicy.KEEP_LAST,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+        qos_tf_static = QoSProfile(
+            depth=100,
+            history=HistoryPolicy.KEEP_LAST,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
 
-        self.local_maps: Dict[int, Tuple[np.ndarray, float]] = {}
+        self.local_maps: Dict[int, np.ndarray] = {}
+        self._map_qos = qos_map
 
         # TF buffer/listener
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # Subscriptions to each bot's downsampled map
-        self.map_subs = []
-        for uid in self.uav_ids:
-            topic = f'/bot{uid}/downsampled_map'
-            self.map_subs.append(
-                self.create_subscription(
-                    PointCloud2,
-                    topic,
-                    lambda msg, uid=uid: self._map_callback(uid, msg),
-                    qos_map,
-                )
-            )
+        self.create_subscription(TFMessage, '/tf', self._on_tf_msg, qos_tf)
+        self.create_subscription(TFMessage, '/tf_static', self._on_tf_msg, qos_tf_static)
 
-        self.global_pub = self.create_publisher(PointCloud2, self.pointcloud_topic, qos_default)
-        self.create_timer(0.5, self._publish_global_map)
+        self.global_pub = self.create_publisher(PointCloud2, self.combined_map_topic, qos_default)
+        self.create_timer(1.0 / max(rate_hz, 0.1), self._publish_global_map)
+
+        self._pc_fields = [
+            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(name='intensity', offset=12, datatype=PointField.FLOAT32, count=1),
+        ]
 
         self.get_logger().info(
-            f'global_map_node TF-fusion started. uav_ids={self.uav_ids}, '
-            f'global_frame={self.origin_frame_id}, pointcloud_topic={self.pointcloud_topic}, '
-            f'tf children=/{self.robot_prefix}X/{self.robot_frame_suffix}'
+            f"global_map_node TF-fusion started. global_frame={self.origin_frame_id}, "
+            f"combined_map_topic={self.combined_map_topic}, tf children=/{self.bot_prefix}<id>/{self.bot_cloud_frame}, "
+            f"cloud_topic=/{self.bot_prefix}<id>/{self.bot_cloud_topic}, voxel_size={self.voxel_size}"
         )
 
+    def _bot_id_from_frame(self, frame_id: str) -> int | None:
+        f = frame_id.lstrip('/')
+        m = self._bot_re.search(f)
+        return int(m.group(1)) if m else None
+
+    def _register_bot(self, bot_id: int | None) -> None:
+        if bot_id is None or bot_id in self._bots:
+            return
+
+        topic = f"/{self.bot_prefix}{bot_id}/{self.bot_cloud_topic}"
+        base_frame = f"{self.bot_prefix}{bot_id}/{self.bot_cloud_frame}".lstrip('/')
+        sub = self.create_subscription(
+            PointCloud2,
+            topic,
+            lambda msg, uid=bot_id: self._map_callback(uid, msg),
+            self._map_qos,
+        )
+        self._bots[bot_id] = BotSub(bot_id=bot_id, cloud_topic=topic, base_frame=base_frame, sub=sub)
+        self.get_logger().info(
+            f"Discovered {self.bot_prefix}{bot_id}: subscribing to '{topic}' (frame '{base_frame}')"
+        )
+
+    def _on_tf_msg(self, msg: TFMessage) -> None:
+        for t in msg.transforms:
+            self._register_bot(self._bot_id_from_frame(t.header.frame_id))
+            self._register_bot(self._bot_id_from_frame(t.child_frame_id))
+
     def _map_callback(self, uid: int, msg: PointCloud2) -> None:
-        pts = self._extract_xyz(msg)
-        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        self.local_maps[uid] = (pts, stamp)
+        pts = self._voxel_downsample(self._extract_xyz(msg))
+        if pts.size == 0:
+            return
+
+        existing = self.local_maps.get(uid)
+        if existing is None or existing.size == 0:
+            self.local_maps[uid] = pts
+        else:
+            combined = np.concatenate((existing, pts), axis=0)
+            self.local_maps[uid] = self._voxel_downsample(combined)
 
     def _extract_xyz(self, msg: PointCloud2) -> np.ndarray:
         """Return Nx3 float32 array of xyz points; be robust to malformed input."""
@@ -111,10 +173,24 @@ class MapFusionNode(Node):
         pts = np.stack((raw['x'], raw['y'], raw['z']), axis=1).astype(np.float32, copy=False)
         return pts
 
+    def _voxel_downsample(self, pts: np.ndarray) -> np.ndarray:
+        """Fast voxel filter: keep first point per voxel grid cell."""
+        if pts.size == 0 or self.voxel_size <= 0.0:
+            return pts
+
+        grid = np.floor(pts / self.voxel_size).astype(np.int64)
+        _, unique_idx = np.unique(grid, axis=0, return_index=True)
+        return pts[unique_idx]
+
     def _child_frame(self, uid: int) -> str:
-        return f'{self.robot_prefix}{uid}/{self.robot_frame_suffix}'.lstrip('/')
+        bot = self._bots.get(uid)
+        if bot is not None:
+            return bot.base_frame
+        return f"{self.bot_prefix}{uid}/{self.bot_cloud_frame}".lstrip('/')
 
     def _lookup_extrinsic(self, uid: int) -> Tuple[np.ndarray, np.ndarray] | None:
+        if uid not in self._bots:
+            return None
         child = self._child_frame(uid)
         try:
             # latest available transform
@@ -136,21 +212,15 @@ class MapFusionNode(Node):
     def _publish_global_map(self) -> None:
         if self.global_pub.get_subscription_count() == 0:
             return
+        if not self._bots:
+            return
 
-        merged_pts: List[List[float]] = []
-        fields = [
-            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
-            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
-            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
-            PointField(name='intensity', offset=12, datatype=PointField.FLOAT32, count=1),
-        ]
+        merged_pts: np.ndarray | None = None
 
-        for uid in self.uav_ids:
-            map_entry = self.local_maps.get(uid)
-            if map_entry is None:
-                continue
-            pts, _ = map_entry
-            if pts.size == 0:
+        for bot in self._bots.values():
+            uid = bot.bot_id
+            pts = self.local_maps.get(uid)
+            if pts is None or pts.size == 0:
                 continue
 
             extr = self._lookup_extrinsic(uid)
@@ -159,18 +229,25 @@ class MapFusionNode(Node):
             R, t = extr
 
             base_int = float(100 * (uid - 1))
-            transformed = (R @ pts.T).T + t
+            transformed = pts @ R.T + t
+            transformed = transformed.astype(np.float32, copy=False)
             intensities = np.full((transformed.shape[0], 1), base_int, dtype=np.float32)
-            combined = np.hstack((transformed.astype(np.float32), intensities))
-            merged_pts.extend(combined.tolist())
+            combined = np.hstack((transformed, intensities))
+            if merged_pts is None:
+                merged_pts = combined
+            else:
+                merged_pts = np.concatenate((merged_pts, combined), axis=0)
 
-        if not merged_pts:
+            # Collapse accumulated data back into single ndarray to bound growth
+            self.local_maps[uid] = pts
+
+        if merged_pts is None or merged_pts.size == 0:
             return
 
         header = Header()
         header.stamp = self.get_clock().now().to_msg()
         header.frame_id = self.origin_frame_id
-        cloud = pc2.create_cloud(header, fields, merged_pts)
+        cloud = pc2.create_cloud(header, self._pc_fields, merged_pts.tolist())
         self.global_pub.publish(cloud)
 
 
