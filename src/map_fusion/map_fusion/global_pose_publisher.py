@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Dict, Optional
 
@@ -20,6 +19,8 @@ from tf2_msgs.msg import TFMessage
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
 from rclpy.exceptions import ParameterAlreadyDeclaredException
+
+from map_fusion.utils import BotFrameResolver
 
 
 @dataclass
@@ -49,10 +50,7 @@ class MultiBotGlobalPose(Node):
         self.pose_topic_suffix: str = str(self.get_parameter("pose_topic_suffix").value)
         rate_hz: float = float(self.get_parameter("publish_rate_hz").value)
 
-        # Match a TF frame path segment like "<bot_prefix><digits>" (e.g., "bot12" in "map_origin/bot12/base_link")
-        # and capture the numeric id; require segment boundaries (start or '/' before, '/' or end after) to avoid
-        # accidental matches inside longer names.
-        self._bot_re = re.compile(rf"(?:^|/){re.escape(self.bot_prefix)}(\d+)(?:/|$)")
+        self._bot_resolver = BotFrameResolver(self.bot_prefix)
         self._bots: Dict[int, BotPub] = {}
 
         self._tf_buffer = Buffer()
@@ -81,12 +79,7 @@ class MultiBotGlobalPose(Node):
             f"'{self.bot_prefix}<id>/{self.bot_frame}'."
         )
 
-    def _bot_id_from_frame(self, frame_id: str) -> Optional[int]:
-        f = frame_id.lstrip("/")
-        m = self._bot_re.search(f)
-        return int(m.group(1)) if m else None
-
-    def _register_bot(self, bot_id: int) -> None:
+    def _register_bot(self, bot_id: Optional[int]) -> None:
         if bot_id is None or bot_id in self._bots:
             return
 
@@ -100,8 +93,8 @@ class MultiBotGlobalPose(Node):
 
     def _on_tf_msg(self, msg: TFMessage) -> None:
         for t in msg.transforms:
-            self._register_bot(self._bot_id_from_frame(t.header.frame_id))
-            self._register_bot(self._bot_id_from_frame(t.child_frame_id))
+            self._register_bot(self._bot_resolver.bot_id_from_frame(t.header.frame_id))
+            self._register_bot(self._bot_resolver.bot_id_from_frame(t.child_frame_id))
 
     def _tick(self) -> None:
         now = rclpy.time.Time()  # latest

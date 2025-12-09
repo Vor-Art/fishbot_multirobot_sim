@@ -11,7 +11,7 @@ def _launch_setup(context, *args, **kwargs):
     # 1) Map fusion node
     map_fusion_node = Node(
         package="map_fusion",
-        executable="global_map_node.py",
+        executable="global_map_publisher.py",
         name="global_map_node",
         output="screen",
         parameters=[{
@@ -21,7 +21,7 @@ def _launch_setup(context, *args, **kwargs):
             "bot_cloud_frame": "world",             # <bot_prefix><i>/<bot_cloud_frame>
 
             "publish_rate_hz": 0.5,
-            "voxel_leaf_size": 0.2,
+            "voxel_leaf_size": 0.1,
 
             "combined_map_topic": "/global_downsampled_map",
             "origin_frame": "map_origin",

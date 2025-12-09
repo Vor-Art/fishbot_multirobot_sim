@@ -10,7 +10,7 @@ find_package(std_msgs REQUIRED)
 ament_python_install_package(${PROJECT_NAME})
 
 install(PROGRAMS
-  map_fusion/global_map_node.py
+  map_fusion/global_map_publisher.py
   map_fusion/global_pose_publisher.py
   DESTINATION lib/${PROJECT_NAME}
 )

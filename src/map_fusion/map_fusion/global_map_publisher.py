@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Dict, Tuple
 
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from rclpy.exceptions import ParameterAlreadyDeclaredException
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
+from rclpy.exceptions import ParameterAlreadyDeclaredException
+
 from std_msgs.msg import Header
 from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs_py import point_cloud2 as pc2
 
 from tf2_msgs.msg import TFMessage
-
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
+
+from map_fusion.utils import BotFrameResolver, quat_to_rot_matrix, pcd_to_xyz_fast, voxelize_numpy
 
 
 @dataclass
@@ -28,30 +29,15 @@ class BotSub:
     sub: any
 
 
-def quat_to_rot_matrix(x: float, y: float, z: float, w: float) -> np.ndarray:
-    n = x*x + y*y + z*z + w*w
-    if n < 1e-12: return np.eye(3)
-    s = 2.0 / n
-    xx, yy, zz = x*x*s, y*y*s, z*z*s
-    xy, xz, yz = x*y*s, x*z*s, y*z*s
-    wx, wy, wz = w*x*s, w*y*s, w*z*s
-    return np.array([
-        [1.0 - (yy + zz),       xy - wz,       xz + wy],
-        [      xy + wz, 1.0 - (xx + zz),       yz - wx],
-        [      xz - wy,       yz + wx, 1.0 - (xx + yy)],
-    ], dtype=float)
-
-
 class MapFusionNode(Node):
     def __init__(self) -> None:
         super().__init__('global_map_node')
 
-        # use_sim_time may already be declared by launch parameters; ignore if so
+        
         try:
             self.declare_parameter('use_sim_time', True)
         except ParameterAlreadyDeclaredException:
             pass
-
         self.declare_parameter('bot_prefix', 'bot')
         self.declare_parameter('bot_cloud_topic', '/cloud_registered')
         self.declare_parameter('bot_cloud_frame', 'world')
@@ -68,8 +54,8 @@ class MapFusionNode(Node):
         rate_hz: float = float(self.get_parameter('publish_rate_hz').value)
         self.voxel_size: float = float(self.get_parameter('voxel_leaf_size').value)
 
-        self._bot_re = re.compile(rf"(?:^|/){re.escape(self.bot_prefix)}(\d+)(?:/|$)")
-        self._bots: Dict[int, BotSub] = {}
+        self.bot_resolver = BotFrameResolver(self.bot_prefix)
+        self.bots_dict: Dict[int, BotSub] = {}
 
         qos_map = QoSProfile(
             depth=10,
@@ -117,107 +103,61 @@ class MapFusionNode(Node):
             f"cloud_topic=/{self.bot_prefix}<id>/{self.bot_cloud_topic}, voxel_size={self.voxel_size}"
         )
 
-    def _bot_id_from_frame(self, frame_id: str) -> int | None:
-        f = frame_id.lstrip('/')
-        m = self._bot_re.search(f)
-        return int(m.group(1)) if m else None
-
     def _register_bot(self, bot_id: int | None) -> None:
-        if bot_id is None or bot_id in self._bots:
+        if bot_id is None or bot_id in self.bots_dict:
             return
 
         topic = f"/{self.bot_prefix}{bot_id}/{self.bot_cloud_topic}"
         base_frame = f"{self.bot_prefix}{bot_id}/{self.bot_cloud_frame}".lstrip('/')
-        sub = self.create_subscription(
-            PointCloud2,
-            topic,
-            lambda msg, uid=bot_id: self._map_callback(uid, msg),
-            self._map_qos,
-        )
-        self._bots[bot_id] = BotSub(bot_id=bot_id, cloud_topic=topic, base_frame=base_frame, sub=sub)
-        self.get_logger().info(
-            f"Discovered {self.bot_prefix}{bot_id}: subscribing to '{topic}' (frame '{base_frame}')"
-        )
+        callback = lambda msg, uid=bot_id: self._map_callback(uid, msg)
+        sub = self.create_subscription(PointCloud2, topic, callback, self._map_qos)
+        self.bots_dict[bot_id] = BotSub(bot_id=bot_id, cloud_topic=topic, base_frame=base_frame, sub=sub)
+        self.get_logger().info(f"Discovered {self.bot_prefix}{bot_id}: subscribing to '{topic}' (frame '{base_frame}')")
 
     def _on_tf_msg(self, msg: TFMessage) -> None:
         for t in msg.transforms:
-            self._register_bot(self._bot_id_from_frame(t.header.frame_id))
-            self._register_bot(self._bot_id_from_frame(t.child_frame_id))
+            self._register_bot(self.bot_resolver.bot_id_from_frame(t.header.frame_id))
+            self._register_bot(self.bot_resolver.bot_id_from_frame(t.child_frame_id))
 
     def _map_callback(self, uid: int, msg: PointCloud2) -> None:
-        pts = self._voxel_downsample(self._extract_xyz(msg))
+        pts = voxelize_numpy(pcd_to_xyz_fast(msg), self.voxel_size)
         if pts.size == 0:
             return
 
         existing = self.local_maps.get(uid)
-        if existing is None or existing.size == 0:
-            self.local_maps[uid] = pts
-        else:
-            combined = np.concatenate((existing, pts), axis=0)
-            self.local_maps[uid] = self._voxel_downsample(combined)
+        if existing is None:
+            existing = np.empty((0, pts.shape[1]), dtype=pts.dtype)
 
-    def _extract_xyz(self, msg: PointCloud2) -> np.ndarray:
-        """Return Nx3 float32 array of xyz points; be robust to malformed input."""
-        try:
-            raw = np.fromiter(
-                pc2.read_points(msg, field_names=('x', 'y', 'z'), skip_nans=True),
-                dtype=[('x', np.float32), ('y', np.float32), ('z', np.float32)],
-            )
-        except Exception as exc:  # pragma: no cover - defensive
-            self.get_logger().warn(f"Failed to parse PointCloud2: {exc}")
-            return np.empty((0, 3), dtype=np.float32)
-
-        if raw.size == 0:
-            return np.empty((0, 3), dtype=np.float32)
-
-        pts = np.stack((raw['x'], raw['y'], raw['z']), axis=1).astype(np.float32, copy=False)
-        return pts
-
-    def _voxel_downsample(self, pts: np.ndarray) -> np.ndarray:
-        """Fast voxel filter: keep first point per voxel grid cell."""
-        if pts.size == 0 or self.voxel_size <= 0.0:
-            return pts
-
-        grid = np.floor(pts / self.voxel_size).astype(np.int64)
-        _, unique_idx = np.unique(grid, axis=0, return_index=True)
-        return pts[unique_idx]
-
-    def _child_frame(self, uid: int) -> str:
-        bot = self._bots.get(uid)
-        if bot is not None:
-            return bot.base_frame
-        return f"{self.bot_prefix}{uid}/{self.bot_cloud_frame}".lstrip('/')
+        combined = pts if existing.size == 0 else np.concatenate((existing, pts), axis=0)
+        self.local_maps[uid] = voxelize_numpy(combined, self.voxel_size)
 
     def _lookup_extrinsic(self, uid: int) -> Tuple[np.ndarray, np.ndarray] | None:
-        if uid not in self._bots:
+        if uid not in self.bots_dict:
             return None
-        child = self._child_frame(uid)
+        child = self.bots_dict.get(uid).base_frame
         try:
             # latest available transform
             tf = self.tf_buffer.lookup_transform(
                 self.origin_frame_id,  # target (parent)
                 child,                 # source (child)
-                rclpy.time.Time()
+                rclpy.time.Time()      # latest
             )
         except (LookupException, ConnectivityException, ExtrapolationException):
             return None
 
         t = tf.transform.translation
         q = tf.transform.rotation
-
         R = quat_to_rot_matrix(q.x, q.y, q.z, q.w)
         trans = np.array([t.x, t.y, t.z], dtype=float)
         return R, trans
 
-    def _publish_global_map(self) -> None:
-        if self.global_pub.get_subscription_count() == 0:
-            return
-        if not self._bots:
-            return
+    def build_global_map(self) -> np.ndarray | None:
+        if not self.bots_dict:
+            return None
 
         merged_pts: np.ndarray | None = None
 
-        for bot in self._bots.values():
+        for bot in self.bots_dict.values():
             uid = bot.bot_id
             pts = self.local_maps.get(uid)
             if pts is None or pts.size == 0:
@@ -241,6 +181,10 @@ class MapFusionNode(Node):
             # Collapse accumulated data back into single ndarray to bound growth
             self.local_maps[uid] = pts
 
+        return merged_pts
+
+    def _publish_global_map(self) -> None:
+        merged_pts = self.build_global_map()
         if merged_pts is None or merged_pts.size == 0:
             return
 
