@@ -1,0 +1,8 @@
+esdf_map_node:
+  ros__parameters:
+    use_sim_time: true
+    cloud_topic: "/bot1/cloud_registered"
+    publish_rate_hz: 2.0
+    costmap_resolution: 0.25
+    costmap_size_m: 20.0
+    default_distance: 3.0

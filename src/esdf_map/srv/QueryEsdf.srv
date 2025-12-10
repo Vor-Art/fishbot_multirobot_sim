@@ -1,0 +1,7 @@
+geometry_msgs/Point position
+float64 max_range
+---
+float64 distance
+geometry_msgs/Vector3 gradient
+bool success
+string message
