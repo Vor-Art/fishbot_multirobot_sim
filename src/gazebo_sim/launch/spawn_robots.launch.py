@@ -43,6 +43,9 @@ def generate_launch_description() -> LaunchDescription:
         xacro_path = os.path.join(pkg_share, 'robots', robot, 'urdf', f'{robot}.xacro')
         config_path = os.path.join(pkg_share, 'robots', robot, 'config', f'{robot}.yaml')
 
+        helper_nodes = []
+        actions = []
+
         def pose_for_index(idx: int) -> tuple[float, float, float, float]:
             """Compute spawn pose per index for the selected pattern."""
             if pattern == 'circle':
@@ -64,14 +67,14 @@ def generate_launch_description() -> LaunchDescription:
                 yaw = 0.0
             return x, y, base_z, yaw
 
-        actions = []
-
         tf_bridge = Node(
             package='ros_gz_bridge',
             executable='parameter_bridge',
-            name='tf_bridge',
+            name='world_pose_bridge',
             output='screen',
-            arguments=['/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V'],
+            arguments=[
+                f'/world/{world_name}/pose/info@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
+            ],
         )
         actions.append(tf_bridge)
 
@@ -135,7 +138,27 @@ def generate_launch_description() -> LaunchDescription:
                 )
             )
 
-        return actions
+        robot_ids = list(range(start_index, start_index + count))
+        if robot_ids:
+            helper_nodes.append(
+                Node(
+                    package='gazebo_sim',
+                    executable='gt_ground_truth_odom.py',
+                    name='gt_ground_truth_odom',
+                    output='screen',
+                    parameters=[{
+                        'use_sim_time': True,
+                        'robot_ids': robot_ids,
+                        'robot_prefix': name_prefix,
+                        'base_frame': 'base_link',
+                        'world_frame': world_name,
+                        'odom_suffix': '/gt/odom',
+                        'tf_topic': f'/world/{world_name}/pose/info',
+                    }],
+                )
+            )
+
+        return actions + helper_nodes
 
     ld = LaunchDescription()
     for action in declare_args:
