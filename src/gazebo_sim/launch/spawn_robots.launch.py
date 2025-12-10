@@ -23,6 +23,7 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument('pattern', default_value='matrix', description='Spawn pattern: line, matrix, or circle.'),
         DeclareLaunchArgument('spacing', default_value='1', description='Step size (line/matrix) or radius (circle).'),
         DeclareLaunchArgument('spawn_delay', default_value='5.0', description='Seconds to wait before issuing spawn requests.'),
+        DeclareLaunchArgument('spawn_time_gap', default_value='0.01', description='Seconds gap between the robots spawn.'),
     ]
 
     def launch_setup(context, *args, **kwargs):
@@ -37,13 +38,10 @@ def generate_launch_description() -> LaunchDescription:
         pattern = LaunchConfiguration('pattern').perform(context).lower()
         spacing = float(LaunchConfiguration('spacing').perform(context))
         spawn_delay = float(LaunchConfiguration('spawn_delay').perform(context))
+        spawn_time_gap = float(LaunchConfiguration('spawn_time_gap').perform(context))
 
         xacro_path = os.path.join(pkg_share, 'robots', robot, 'urdf', f'{robot}.xacro')
         config_path = os.path.join(pkg_share, 'robots', robot, 'config', f'{robot}.yaml')
-
-        rsp_nodes = []
-        spawn_nodes = []
-        bridge_nodes = []
 
         def pose_for_index(idx: int) -> tuple[float, float, float, float]:
             """Compute spawn pose per index for the selected pattern."""
@@ -66,16 +64,16 @@ def generate_launch_description() -> LaunchDescription:
                 yaw = 0.0
             return x, y, base_z, yaw
 
+        actions = []
+
         tf_bridge = Node(
             package='ros_gz_bridge',
             executable='parameter_bridge',
             name='tf_bridge',
             output='screen',
-            arguments=[
-                '/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
-            ],
+            arguments=['/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V'],
         )
-        bridge_nodes.append(tf_bridge)
+        actions.append(tf_bridge)
 
         for i in range(count):
             name = f'{name_prefix}{start_index + i}'
@@ -84,7 +82,7 @@ def generate_launch_description() -> LaunchDescription:
                 ' config_file:=', config_path,
             ])
 
-            rsp_nodes.append(
+            actions.append(
                 Node(
                     package='robot_state_publisher',
                     executable='robot_state_publisher',
@@ -100,45 +98,44 @@ def generate_launch_description() -> LaunchDescription:
 
             spawn_x, spawn_y, spawn_z, spawn_yaw = pose_for_index(i)
 
-            spawn_nodes.append(
-                Node(
-                    package='ros_gz_sim',
-                    executable='create',
-                    name=f'{name}_spawner',
-                    output='screen',
-                    arguments=[
-                        '--world', world_name,
-                        '--name', name,
-                        '--allow_renaming=false',
-                        '--string', robot_description,
-                        '--x', str(spawn_x),
-                        '--y', str(spawn_y),
-                        '--z', str(spawn_z),
-                        '--Y', str(spawn_yaw),
-                    ],
+            spawn_node = Node(
+                package='ros_gz_sim',
+                executable='create',
+                name=f'{name}_spawner',
+                output='screen',
+                arguments=[
+                    '--world', world_name,
+                    '--name', name,
+                    '--allow_renaming=false',
+                    '--string', robot_description,
+                    '--x', str(spawn_x),
+                    '--y', str(spawn_y),
+                    '--z', str(spawn_z),
+                    '--Y', str(spawn_yaw),
+                ],
+            )
+
+            bridge_node = Node(
+                package='ros_gz_bridge',
+                executable='parameter_bridge',
+                name=f'{name}_bridge',
+                output='screen',
+                arguments=[
+                    f'/{name}/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
+                    f'/{name}/wheel_odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+                    f'/{name}/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
+                    f'/{name}/lidar_points/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
+                ],
+            )
+
+            actions.append(
+                TimerAction(
+                    period=spawn_delay + i * spawn_time_gap,
+                    actions=[spawn_node, bridge_node],
                 )
             )
 
-            bridge_nodes.append(
-                Node(
-                    package='ros_gz_bridge',
-                    executable='parameter_bridge',
-                    name=f'{name}_bridge',
-                    output='screen',
-                    arguments=[
-                        f'/{name}/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
-                        f'/{name}/wheel_odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
-                        f'/{name}/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
-                        f'/{name}/lidar_points/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
-                    ],
-                )
-            )
-
-        if not rsp_nodes:
-            return []
-
-        spawn_after_delay = TimerAction(period=spawn_delay, actions=spawn_nodes)
-        return rsp_nodes + bridge_nodes + [spawn_after_delay]
+        return actions
 
     ld = LaunchDescription()
     for action in declare_args:

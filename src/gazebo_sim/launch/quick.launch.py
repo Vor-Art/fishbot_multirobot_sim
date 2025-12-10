@@ -22,6 +22,7 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument('start_index', default_value='1'),
         DeclareLaunchArgument('x', default_value='0.0'),
         DeclareLaunchArgument('y', default_value='0.0'),
+        DeclareLaunchArgument('z', default_value='0.0'),
         DeclareLaunchArgument('pattern', default_value='matrix'),
         DeclareLaunchArgument('spacing', default_value='1'),
     ]
@@ -47,6 +48,7 @@ def generate_launch_description() -> LaunchDescription:
             'start_index': LaunchConfiguration('start_index'),
             'x': LaunchConfiguration('x'),
             'y': LaunchConfiguration('y'),
+            'z': LaunchConfiguration('z'),
             'pattern': LaunchConfiguration('pattern'),
             'spacing': LaunchConfiguration('spacing'),
         }.items(),
