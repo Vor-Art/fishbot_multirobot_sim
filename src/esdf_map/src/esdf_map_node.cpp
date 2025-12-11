@@ -2,6 +2,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <iomanip>
+#include <numeric>
+#include <sstream>
 #include <utility>
 
 #include <pcl/point_cloud.h>
@@ -73,6 +77,7 @@ namespace esdf_map
         costmap_layer_z_ = declare_parameter<double>("costmap_layer_z", 0.5);
         costmap_free_distance_ = declare_parameter<double>("costmap_free_distance", 0.5);
         costmap_lethal_distance_ = declare_parameter<double>("costmap_lethal_distance", 0.1);
+        time_log_ = declare_parameter<bool>("time_log", false);
     }
 
     EsdfMapCore::Config EsdfMapNode::makeCoreConfig() const {
@@ -159,8 +164,6 @@ namespace esdf_map
             return;
         }
         if (!core_) return;
-
-        
         Eigen::Isometry3d T_M_L; //TODO: Raycast not implemented
         // const Bot &bot = it->second;
         // if (!lookupLidarPose(bot.sensor_frame, msg->header.stamp, T_M_L)) {
@@ -169,10 +172,14 @@ namespace esdf_map
 
         PointCloud cloud_M;
         pointCloud2ToPcl(*msg, cloud_M);
+        const auto t_integrate_start = std::chrono::steady_clock::now();
         core_->integrateCloud(cloud_M, T_M_L);
+        recordTiming("1. integrate_cloud", std::chrono::steady_clock::now() - t_integrate_start);
 
         if (integrate_every_cloud_) {
+            const auto t_update_start = std::chrono::steady_clock::now();
             core_->updateEsdf();
+            recordTiming("2. update_esdf", std::chrono::steady_clock::now() - t_update_start);
         }
     }
 
@@ -204,7 +211,9 @@ namespace esdf_map
 
     void EsdfMapNode::esdfUpdateTimerCb() {
         if (!core_) return;
+        const auto t_start = std::chrono::steady_clock::now();
         core_->updateEsdf();
+        recordTiming("2. update_esdf", std::chrono::steady_clock::now() - t_start);
     }
 
     void EsdfMapNode::publishTimerCb() {
@@ -215,9 +224,11 @@ namespace esdf_map
         if (publish_costmap_2d_) {
             publishCostmap2D();
         }
+        if (time_log_) logTimingReport();
     }
 
     void EsdfMapNode::publishGrid() {
+        const auto t_total_start = std::chrono::steady_clock::now();
         if (!esdf_grid_pub_) return;
 
         std::vector<Voxel> voxels;
@@ -247,9 +258,11 @@ namespace esdf_map
         msg.header.stamp = this->get_clock()->now();
         msg.header.frame_id = world_frame_;
         esdf_grid_pub_->publish(msg);
+        recordTiming("publish_esdf", std::chrono::steady_clock::now() - t_total_start);
     }
 
     void EsdfMapNode::publishCostmap2D() {
+        const auto t_total_start = std::chrono::steady_clock::now();
         if (!costmap_pub_) return;
 
         Slice2D slice;
@@ -262,6 +275,7 @@ namespace esdf_map
         msg.header.frame_id = world_frame_;
         fillCostmapMsg(slice, msg);
         costmap_pub_->publish(msg);
+        recordTiming("publish_costmap", std::chrono::steady_clock::now() - t_total_start);
     }
 
     void EsdfMapNode::pointCloud2ToPcl(const PointCloud2 &msg,
@@ -310,6 +324,75 @@ namespace esdf_map
                 grid_msg.data[idx] = cost;
             }
         }
+    }
+
+    void EsdfMapNode::recordTiming(const std::string &name,
+                                   std::chrono::steady_clock::duration duration)
+    {
+        if (!time_log_) return;
+        const auto now = std::chrono::steady_clock::now();
+        double ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(duration).count();
+
+        auto &buffer = timing_history_[name];
+        buffer.emplace_back(now, ms);
+
+        // Drop samples older than window
+        const auto window_start = now - timing_window_;
+        while (!buffer.empty() && buffer.front().first < window_start) {
+            buffer.pop_front();
+        }
+
+        (void)buffer;
+    }
+
+    bool EsdfMapNode::computeTimingStats(const std::string &name, double &mean_ms,
+                                         double &std_ms, std::size_t &count)
+    {
+        auto it = timing_history_.find(name);
+        if (it == timing_history_.end() || it->second.empty()) {
+            return false;
+        }
+
+        const auto &buffer = it->second;
+        double sum = 0.0;
+        double sum_sq = 0.0;
+        for (const auto &p : buffer) {
+            sum += p.second;
+            sum_sq += p.second * p.second;
+        }
+        count = buffer.size();
+        mean_ms = sum / static_cast<double>(count);
+        const double var = std::max(0.0, sum_sq / static_cast<double>(count) - mean_ms * mean_ms);
+        std_ms = std::sqrt(var);
+        return true;
+    }
+
+    void EsdfMapNode::logTimingReport()
+    {
+        std::ostringstream oss;
+        auto secs = std::chrono::duration_cast<std::chrono::seconds>(timing_window_).count();
+        oss << "[time " << secs << "s]\n";
+        oss << "-------------------------------------------------\n";
+        oss << "  " << std::left << std::setw(21) << "Key"
+            << std::right << std::setw(8) << "Mean(ms)"
+            << std::setw(8) << "Std(ms)"
+            << std::setw(8) << "Count" << "\n";
+        oss << "-------------------------------------------------\n";
+
+        for (const auto &[k,_] : timing_history_) {
+            double mean = 0.0, stddev = 0.0;
+            std::size_t n = 0;
+
+            if (computeTimingStats(k, mean, stddev, n)) {
+                oss << "  " << std::left << std::setw(21) << k
+                    << std::right << std::setw(8) << std::fixed << std::setprecision(1) << mean
+                    << std::setw(8) << std::setprecision(1) << stddev
+                    << std::setw(8) << n << "\n";
+            }
+        }
+
+        oss << "-------------------------------------------------\n";
+        RCLCPP_INFO(get_logger(), "%s", oss.str().c_str());
     }
 
     void EsdfMapNode::handleQuery(const std::shared_ptr<EsdfQuery::Request> request,

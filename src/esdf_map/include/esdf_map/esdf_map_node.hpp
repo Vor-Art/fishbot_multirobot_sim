@@ -1,9 +1,12 @@
 #pragma once
 
+#include <deque>
 #include <map>
+#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <cstdint>
 
 #include <Eigen/Core>
@@ -70,6 +73,11 @@ namespace esdf_map
         // Helpers
         void pointCloud2ToPcl(const PointCloud2 &msg, esdf_map::PointCloud &cloud_out) const;
         void fillCostmapMsg(const esdf_map::Slice2D &slice, OccupancyGrid &grid_msg) const;
+        void recordTiming(const std::string &name,
+                          std::chrono::steady_clock::duration duration);
+        void logTimingReport();
+        bool computeTimingStats(const std::string &name, double &mean_ms,
+                                double &std_ms, std::size_t &count);
 
         // Core map
         std::unique_ptr<EsdfMapCore> core_;
@@ -112,6 +120,8 @@ namespace esdf_map
         double costmap_layer_z_{0.5};
         double costmap_free_distance_{0.5};
         double costmap_lethal_distance_{0.1};
+        bool time_log_{false};
+        std::chrono::steady_clock::duration timing_window_{std::chrono::seconds(25)};
 
         // Publishers / timers / service
         rclcpp::Publisher<PointCloud2>::SharedPtr esdf_grid_pub_;
@@ -119,6 +129,9 @@ namespace esdf_map
         rclcpp::TimerBase::SharedPtr esdf_update_timer_;
         rclcpp::TimerBase::SharedPtr publish_timer_;
         rclcpp::Service<EsdfQuery>::SharedPtr query_srv_;
+
+        using TimingBuffer = std::deque<std::pair<std::chrono::steady_clock::time_point, double>>;
+        std::unordered_map<std::string, TimingBuffer> timing_history_;
     };
 
 } // namespace esdf_map

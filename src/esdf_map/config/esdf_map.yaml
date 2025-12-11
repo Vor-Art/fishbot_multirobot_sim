@@ -35,3 +35,4 @@ esdf_map_node:
     costmap_layer_z: 0.5             # [m] slice height in world_frame
     costmap_free_distance: 2.5       # [m] dist >= free -> cost=0
     costmap_lethal_distance: 0.25    # [m] dist <= lethal -> cost=100
+    time_log: true                   # enable timing stats (avg/std over last 10s)
