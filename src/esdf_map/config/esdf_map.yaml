@@ -1,8 +1,15 @@
 esdf_map_node:
   ros__parameters:
-    use_sim_time: true
-    cloud_topic: "/bot1/cloud_registered"
-    publish_rate_hz: 2.0
-    costmap_resolution: 0.25
-    costmap_size_m: 20.0
-    default_distance: 3.0
+
+    bot_prefix: "bot"                     # matches bot1/... bot2/...
+    bot_cloud_topic: "/cloud_registered"  # PointCloud2 transformated in the world_frame frame
+    bot_sensor_frame: "lidar_link"        # botX/lidar_link
+
+    world_frame: "map_origin"             # your global/map frame
+
+    publish_rate_hz: 0.5
+
+    esdf_resolution: 0.1
+    esdf_size_m: 30.0
+
+    costmap_level_m: 1.0                  # for visualization costmap slice

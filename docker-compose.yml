@@ -32,7 +32,7 @@ services:
       - ${HOME}/.Xauthority:/root/.Xauthority:ro
       - ./src/gazebo_sim/:/fishbot_ws/src/gazebo_sim/
     command: >
-      bash -lc "ros2 launch gazebo_sim quick.launch.py world:=fishbot2.world pattern:=circle x:=-3 count:=${FISHBOT_AGENT_COUNT:-4}"
+      bash -lc "ros2 launch gazebo_sim quick.launch.py world:=fishbot2.world pattern:=grid spacing:=2 x:=-3 count:=${FISHBOT_AGENT_COUNT:-4}"
 
   # navigation:
   #   container_name: fishbot_navigation

@@ -17,3 +17,8 @@ __pycache__
 *.bag
 *.db3
 *.sqlite3
+
+# Keep source code in build context, but avoid invalidating the image when only
+# configs/launch files change (these are bind-mounted at runtime).
+src/esdf_map/config/*
+src/esdf_map/launch/*
