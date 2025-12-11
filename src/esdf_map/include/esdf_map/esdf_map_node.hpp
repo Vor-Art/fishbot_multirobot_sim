@@ -108,6 +108,7 @@ namespace esdf_map
         double max_ray_length_{30.0};
         double truncation_distance_{0.3};
         double esdf_max_distance_{5.0};
+        bool enable_chamfer_relax_{true};
 
         bool integrate_every_cloud_{true};
         double esdf_update_rate_hz_{2.0};

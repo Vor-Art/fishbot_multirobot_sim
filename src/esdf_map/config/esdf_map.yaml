@@ -22,6 +22,7 @@ esdf_map_node:
     max_ray_length: 30.0             # [m] limit ray casting #TODO unused in simple core
     truncation_distance: 0.3         # [m] TSDF truncation band  #TODO unused in simple core
     esdf_max_distance: 5.0           # [m] clamp ESDF values
+    enable_chamfer_relax: false       # enabple more accurate result
 
     # --- ESDF update strategy ---
     integrate_every_cloud: false     # update ESDF after every cloud

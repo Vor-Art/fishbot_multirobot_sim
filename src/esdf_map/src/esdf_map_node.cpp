@@ -67,6 +67,7 @@ namespace esdf_map
         max_ray_length_ = declare_parameter<double>("max_ray_length", 30.0);
         truncation_distance_ = declare_parameter<double>("truncation_distance", 0.3);
         esdf_max_distance_ = declare_parameter<double>("esdf_max_distance", 5.0);
+        enable_chamfer_relax_ = declare_parameter<bool>("enable_chamfer_relax", true);
 
         integrate_every_cloud_ = declare_parameter<bool>("integrate_every_cloud", true);
         esdf_update_rate_hz_ = declare_parameter<double>("esdf_update_rate_hz", 2.0);
@@ -93,6 +94,7 @@ namespace esdf_map
         cfg.max_ray_length = max_ray_length_;
         cfg.truncation_distance = truncation_distance_;
         cfg.esdf_max_distance = esdf_max_distance_;
+        cfg.enable_chamfer_relax = enable_chamfer_relax_;
         return cfg;
     }
 

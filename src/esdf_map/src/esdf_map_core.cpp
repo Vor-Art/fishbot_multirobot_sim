@@ -346,7 +346,7 @@ namespace esdf_map {
         }
     }
 
-    // Multi-source BFS distance transform from obstacle voxels.
+    // Multi-source BFS (6-neighborhood) + chamfer relax (12).
     void EsdfMapCore::updateEsdf() {
         const int nx = config_.dims.x();
         const int ny = config_.dims.y();
@@ -355,46 +355,130 @@ namespace esdf_map {
         const float max_dist = static_cast<float>(config_.esdf_max_distance);
         const float inf = max_dist + 2.0f * static_cast<float>(config_.resolution);
 
-        std::queue<int> q;
+        // -------------------------
+        // 1) Multi-source BFS (6)
+        // -------------------------
+        {
+            std::queue<int> q;
 
-        for (int i = 0; i < impl_->num_voxels; ++i) {
-            if (impl_->distance_grid[i] == 0.0f) {
-                q.push(i);
-            } else {
-                impl_->distance_grid[i] = inf;
+            for (int i = 0; i < impl_->num_voxels; ++i) {
+                if (impl_->distance_grid[i] == 0.0f) {
+                    q.push(i);
+                } else {
+                    impl_->distance_grid[i] = inf;
+                }
+            }
+
+            auto push_neighbor = [&](int x, int y, int z, int cur_idx) {
+                if (x < 0 || x >= nx || y < 0 || y >= ny || z < 0 || z >= nz) {
+                    return;
+                }
+                Eigen::Vector3i idx_3d(x, y, z);
+                int idx = flattenIndex(idx_3d, config_.dims);
+                float tentative = impl_->distance_grid[cur_idx] + static_cast<float>(config_.resolution);
+                if (tentative < impl_->distance_grid[idx] && tentative <= max_dist) {
+                    impl_->distance_grid[idx] = tentative;
+                    q.push(idx);
+                }
+            };
+
+            while (!q.empty()) {
+                int cur = q.front();
+                q.pop();
+
+                int z = cur / (nx * ny);
+                int rem = cur - z * nx * ny;
+                int y = rem / nx;
+                int x = rem - y * nx;
+
+                push_neighbor(x + 1, y, z, cur);
+                push_neighbor(x - 1, y, z, cur);
+                push_neighbor(x, y + 1, z, cur);
+                push_neighbor(x, y - 1, z, cur);
+                push_neighbor(x, y, z + 1, cur);
+                push_neighbor(x, y, z - 1, cur);
             }
         }
+        // -------------------------
+        // 2) Chamfer relax (12 dir)
+        // -------------------------
+        if (config_.enable_chamfer_relax) 
+        {
+            // Flat index strides
+            const int stride_x = 1;
+            const int stride_y = nx;
+            const int stride_z = nx * ny;
 
-        auto push_neighbor = [&](int x, int y, int z, int cur_idx) {
-            if (x < 0 || x >= nx || y < 0 || y >= ny || z < 0 || z >= nz) {
-                return;
+            struct Offset {
+                int dx, dy, dz;
+                int dIndex;  // flat index delta
+            };
+
+            // 12 semi-diagonal neighbors: (±1,±1,0), (±1,0,±1), (0,±1,±1)
+            std::array<Offset, 12> semi{{
+                {  1,  1,  0, 0 }, {  1, -1,  0, 0 },
+                { -1,  1,  0, 0 }, { -1, -1,  0, 0 },
+                {  1,  0,  1, 0 }, {  1,  0, -1, 0 },
+                { -1,  0,  1, 0 }, { -1,  0, -1, 0 },
+                {  0,  1,  1, 0 }, {  0,  1, -1, 0 },
+                {  0, -1,  1, 0 }, {  0, -1, -1, 0 }
+            }};
+
+            // Precompute flat index deltas for all offsets
+            for (auto &o : semi) {
+                o.dIndex = o.dx * stride_x + o.dy * stride_y + o.dz * stride_z;
             }
-            Eigen::Vector3i idx_3d(x, y, z);
-            int idx = flattenIndex(idx_3d, config_.dims);
-            float tentative = impl_->distance_grid[cur_idx] + static_cast<float>(config_.resolution);
-            if (tentative < impl_->distance_grid[idx] && tentative <= max_dist) {
-                impl_->distance_grid[idx] = tentative;
-                q.push(idx);
+
+            auto in_bounds = [&](int x, int y, int z) {
+                return (0 <= x && x < nx) && 
+                    (0 <= y && y < ny) &&
+                    (0 <= z && z < nz);
+            };
+
+            const float semi_w = static_cast<float>(config_.resolution * std::sqrt(2.0));
+
+            auto relax_voxel = [&](int idx, int x, int y, int z) {
+                float current = impl_->distance_grid[idx];
+                for (const auto& o : semi) {
+                    const int nx_i = x + o.dx;
+                    const int ny_i = y + o.dy;
+                    const int nz_i = z + o.dz;
+                    if (!in_bounds(nx_i, ny_i, nz_i)) continue;
+
+                    const int n_idx = idx + o.dIndex;
+                    const float tentative = impl_->distance_grid[n_idx] + semi_w;
+                    if (tentative < current && tentative <= max_dist) {
+                        current = tentative;
+                    }
+                }
+                impl_->distance_grid[idx] = current;
+            };
+
+            // Forward sweep
+            {
+                int idx = 0;
+                for (int z = 0; z < nz; ++z) {
+                    for (int y = 0; y < ny; ++y) {
+                        for (int x = 0; x < nx; ++x, ++idx) {
+                            relax_voxel(idx, x, y, z);
+                        }
+                    }
+                }
             }
-        };
-
-        while (!q.empty()) {
-            int cur = q.front();
-            q.pop();
-
-            int z = cur / (nx * ny);
-            int rem = cur - z * nx * ny;
-            int y = rem / nx;
-            int x = rem - y * nx;
-
-            push_neighbor(x + 1, y, z, cur);
-            push_neighbor(x - 1, y, z, cur);
-            push_neighbor(x, y + 1, z, cur);
-            push_neighbor(x, y - 1, z, cur);
-            push_neighbor(x, y, z + 1, cur);
-            push_neighbor(x, y, z - 1, cur);
+            // Backward sweep
+            for (int z = nz - 1; z >= 0; --z) {
+                for (int y = ny - 1; y >= 0; --y) {
+                    const int base = z * stride_z + y * stride_y;
+                    for (int x = nx - 1; x >= 0; --x) {
+                        const int idx = base + x;
+                        relax_voxel(idx, x, y, z);
+                    }
+                }
+            }
         }
-
+        // ------------------------
+        // 3) Clamp & mark region
+        // ------------------------
         for (int i = 0; i < impl_->num_voxels; ++i) {
             if (impl_->distance_grid[i] > max_dist) {
                 impl_->distance_grid[i] = max_dist;

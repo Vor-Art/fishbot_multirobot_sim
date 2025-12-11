@@ -55,6 +55,7 @@ namespace esdf_map
             double truncation_distance = 0.3; // [m] //TODO: Raycast not implemented
             double esdf_max_distance = 5.0;   // [m]
             bool enable_clearing_rays = true;        //TODO: Raycast not implemented
+            bool enable_chamfer_relax = true; // for accurate result
 
             // Probabilistic fusion (if you choose log-odds style).
             double p_hit = 0.70;                     //TODO: Raycast not implemented
