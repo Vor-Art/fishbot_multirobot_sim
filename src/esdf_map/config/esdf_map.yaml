@@ -3,19 +3,19 @@ esdf_map_node:
 
     # --- Robot inputs ---
     bot_prefix: "bot"                # "bot" -> bot1, bot2, ...
-    bot_ids: [1, 2, 3]               # robots that should be fused
+    bot_ids: [1]               # robots that should be fused
     bot_cloud_topic: "cloud_registered"  # /botX/<this>
     bot_sensor_frame: "lidar_link"   # botX/<this>
     world_frame: "map_origin"        # global ESDF frame
     tf_timeout_sec: 0.1              # TF lookup timeout [s]
 
     # --- Map geometry (global ESDF grid in world_frame) ---
-    esdf_resolution: 0.1             # [m] voxel size
-    map_size_x: 30.0                 # [m]
-    map_size_y: 30.0                 # [m]
+    esdf_resolution: 0.2             # [m] voxel size
+    map_size_x: 20.0                 # [m]
+    map_size_y: 15.0                 # [m]
     map_size_z: 5.0                  # [m]
-    map_origin_x: -15.0              # [m]
-    map_origin_y: -15.0              # [m]
+    map_origin_x: -5.0               # [m]
+    map_origin_y: -7.5               # [m]
     map_origin_z: 0.0                # [m]
 
     # --- TSDF / occupancy integration ---
@@ -24,8 +24,8 @@ esdf_map_node:
     esdf_max_distance: 5.0           # [m] clamp ESDF values
 
     # --- ESDF update strategy ---
-    integrate_every_cloud: true      # update ESDF after every cloud
-    esdf_update_rate_hz: 2.0         # used if integrate_every_cloud = false
+    integrate_every_cloud: false     # update ESDF after every cloud
+    esdf_update_rate_hz: 1.0         # used if integrate_every_cloud = false
 
     # --- Output / visualization ---
     publish_rate_hz: 1.0             # [Hz] publish grid & costmap
@@ -33,5 +33,5 @@ esdf_map_node:
     publish_costmap_2d: true         # enable /esdf/costmap_2d
 
     costmap_layer_z: 0.5             # [m] slice height in world_frame
-    costmap_free_distance: 0.5       # [m] dist >= free -> cost=0
-    costmap_lethal_distance: 0.1     # [m] dist <= lethal -> cost=100
+    costmap_free_distance: 2.5       # [m] dist >= free -> cost=0
+    costmap_lethal_distance: 0.25    # [m] dist <= lethal -> cost=100

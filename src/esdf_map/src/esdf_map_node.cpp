@@ -127,22 +127,22 @@ namespace esdf_map
     }
 
     void EsdfMapNode::setupTimers() {
-        rclcpp::Clock::SharedPtr clock = this->get_clock();  // ROS / sim time clock
+        auto clock = this->get_clock();  // ROS / sim time clock
+        auto node_base = this->get_node_base_interface();
+        auto timer_iface = this->get_node_timers_interface();
 
         if (!integrate_every_cloud_ && esdf_update_rate_hz_ > 0.0) {
             auto period = rclcpp::Duration::from_seconds(1.0 / esdf_update_rate_hz_);
             esdf_update_timer_ = rclcpp::create_timer(
-                shared_from_this(), clock, period,
-                std::bind(&EsdfMapNode::esdfUpdateTimerCb, this)
-            );
+                node_base, timer_iface, clock, period,
+                std::bind(&EsdfMapNode::esdfUpdateTimerCb, this));
         }
 
         if (publish_rate_hz_ > 0.0) {
             auto period = rclcpp::Duration::from_seconds(1.0 / publish_rate_hz_);
             publish_timer_ = rclcpp::create_timer(
-                shared_from_this(), clock, period,
-                std::bind(&EsdfMapNode::publishTimerCb, this)
-            );
+                node_base, timer_iface, clock, period,
+                std::bind(&EsdfMapNode::publishTimerCb, this));
         }
     }
 
@@ -227,7 +227,7 @@ namespace esdf_map
         pcl_cloud.reserve(voxels.size());
 
         for (const auto &v : voxels) {
-            if (!v.observed) continue;
+            // if (!v.observed) continue; // TODO: Raycast not implemented
             pcl::PointXYZI p;
             p.x = static_cast<float>(v.center.x());
             p.y = static_cast<float>(v.center.y());

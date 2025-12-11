@@ -263,7 +263,6 @@ namespace esdf_map {
         const double gz = (z_M - config_.origin.z()) / config_.resolution;
         int iz = static_cast<int>(std::round(gz));
 
-
         const int nx = config_.dims.x();
         const int ny = config_.dims.y();
         const int nz = config_.dims.z();
