@@ -1,127 +1,375 @@
 #include "esdf_map/esdf_map_node.hpp"
 
-#include <geometry_msgs/msg/point.hpp>
-#include <geometry_msgs/msg/vector3.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
-
 #include <algorithm>
 #include <chrono>
-#include <cmath>
-#include <vector>
+#include <utility>
+
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl_conversions/pcl_conversions.h>
+
+#include <rclcpp/create_timer.hpp>
+
+#include <geometry_msgs/msg/transform_stamped.hpp>
+#include <tf2/exceptions.h>
+
+using namespace std::chrono_literals;
 
 namespace esdf_map
 {
-    using namespace std::chrono_literals;
 
-    EsdfMapNode::EsdfMapNode(const rclcpp::NodeOptions &options) : Node("esdf_map_node", options)
+    EsdfMapNode::EsdfMapNode(const rclcpp::NodeOptions &options)
+        : rclcpp::Node("esdf_map_node", options)
     {
-        cloud_topic_ = declare_parameter<std::string>("cloud_topic", "/bot1/cloud_registered");
-        publish_rate_hz_ = declare_parameter<double>("publish_rate_hz", 2.0);
-        costmap_resolution_ = declare_parameter<double>("costmap_resolution", 0.25);
-        costmap_size_m_ = declare_parameter<double>("costmap_size_m", 20.0);
-        default_distance_ = declare_parameter<double>("default_distance", 3.0);
+        declareAndLoadParams();
 
-        costmap_resolution_ = std::max(0.01, costmap_resolution_);
-        costmap_size_m_ = std::max(costmap_size_m_, 2.0 * costmap_resolution_);
-        core_.setDefaultDistance(default_distance_);
-        core_.setCostmap(costmap_resolution_, costmap_size_m_);
+        tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-        cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
-            cloud_topic_, rclcpp::SensorDataQoS(),
-            std::bind(&EsdfMapNode::handleCloud, this, std::placeholders::_1));
+        EsdfMapCore::Config cfg = makeCoreConfig();
+        core_ = std::make_unique<EsdfMapCore>(cfg);
 
-        grid_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>("esdf/grid", rclcpp::QoS(10));
-        costmap_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>("esdf/costmap_2d", rclcpp::QoS(1));
-        query_service_ = create_service<srv::QueryEsdf>("esdf/query",
-                                                        std::bind(&EsdfMapNode::handleQuery, this, std::placeholders::_1, std::placeholders::_2));
+        buildBotList();
 
-        const std::chrono::duration<double> period =
-            publish_rate_hz_ > 0.0 ? std::chrono::duration<double>(1.0 / publish_rate_hz_) : std::chrono::duration<double>(0.5);
-        publish_timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::nanoseconds>(period),
-                                           std::bind(&EsdfMapNode::publishOutputs, this));
+        esdf_grid_pub_ = create_publisher<PointCloud2>(
+            "/esdf/grid", rclcpp::QoS(1).transient_local());
+        costmap_pub_ = create_publisher<OccupancyGrid>(
+            "/esdf/costmap_2d", rclcpp::QoS(1).transient_local());
 
-        RCLCPP_INFO(get_logger(), "ESDF map mock node ready. Listening to %s", cloud_topic_.c_str());
+        setupSubscriptions();
+        setupTimers();
+        setupService();
+
+        RCLCPP_INFO(get_logger(), "esdf_map_node initialized with %zu bots", bots_.size());
     }
 
-    void EsdfMapNode::handleCloud(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
-    {
-        last_cloud_ = std::make_shared<sensor_msgs::msg::PointCloud2>(*msg);
-        last_cloud_->header.frame_id = "map_origin";
-        core_.updateFromCloud(static_cast<std::size_t>(msg->width) * static_cast<std::size_t>(msg->height));
-        RCLCPP_DEBUG(get_logger(), "Received cloud with %u points", msg->width * msg->height);
+    void EsdfMapNode::declareAndLoadParams() {
+        bot_prefix_ = declare_parameter<std::string>("bot_prefix", "bot");
+        bot_cloud_topic_ = declare_parameter<std::string>("bot_cloud_topic", "cloud_registered");
+        bot_sensor_frame_ = declare_parameter<std::string>("bot_sensor_frame", "lidar_link");
+        world_frame_ = declare_parameter<std::string>("world_frame", "map_origin");
+        tf_timeout_sec_ = declare_parameter<double>("tf_timeout_sec", 0.1);
+
+        bot_ids_ = declare_parameter<std::vector<int64_t>>("bot_ids", {1});
+
+        esdf_resolution_ = declare_parameter<double>("esdf_resolution", 0.1);
+        map_size_x_ = declare_parameter<double>("map_size_x", 30.0);
+        map_size_y_ = declare_parameter<double>("map_size_y", 30.0);
+        map_size_z_ = declare_parameter<double>("map_size_z", 5.0);
+        map_origin_x_ = declare_parameter<double>("map_origin_x", -15.0);
+        map_origin_y_ = declare_parameter<double>("map_origin_y", -15.0);
+        map_origin_z_ = declare_parameter<double>("map_origin_z", 0.0);
+
+        max_ray_length_ = declare_parameter<double>("max_ray_length", 30.0);
+        truncation_distance_ = declare_parameter<double>("truncation_distance", 0.3);
+        esdf_max_distance_ = declare_parameter<double>("esdf_max_distance", 5.0);
+
+        integrate_every_cloud_ = declare_parameter<bool>("integrate_every_cloud", true);
+        esdf_update_rate_hz_ = declare_parameter<double>("esdf_update_rate_hz", 2.0);
+
+        publish_rate_hz_ = declare_parameter<double>("publish_rate_hz", 1.0);
+        publish_full_grid_ = declare_parameter<bool>("publish_full_grid", true);
+        publish_costmap_2d_ = declare_parameter<bool>("publish_costmap_2d", true);
+        costmap_layer_z_ = declare_parameter<double>("costmap_layer_z", 0.5);
+        costmap_free_distance_ = declare_parameter<double>("costmap_free_distance", 0.5);
+        costmap_lethal_distance_ = declare_parameter<double>("costmap_lethal_distance", 0.1);
     }
 
-    void EsdfMapNode::publishOutputs()
-    {
-        const auto stamp = get_clock()->now();
+    EsdfMapCore::Config EsdfMapNode::makeCoreConfig() const {
+        EsdfMapCore::Config cfg;
+        cfg.resolution = esdf_resolution_;
+        cfg.origin = Eigen::Vector3d(map_origin_x_, map_origin_y_, map_origin_z_);
 
-        grid_pub_->publish(buildMockEsdfGrid(stamp));
-        costmap_pub_->publish(buildMockCostmap(stamp));
+        auto nx = static_cast<int>(std::round(map_size_x_ / esdf_resolution_));
+        auto ny = static_cast<int>(std::round(map_size_y_ / esdf_resolution_));
+        auto nz = static_cast<int>(std::round(map_size_z_ / esdf_resolution_));
+        cfg.dims = Eigen::Vector3i(std::max(nx, 1), std::max(ny, 1), std::max(nz, 1));
 
-        ++publish_count_;
+        cfg.max_ray_length = max_ray_length_;
+        cfg.truncation_distance = truncation_distance_;
+        cfg.esdf_max_distance = esdf_max_distance_;
+        return cfg;
     }
 
-    sensor_msgs::msg::PointCloud2 EsdfMapNode::buildMockEsdfGrid(const rclcpp::Time &stamp) const
-    {
-        if (last_cloud_)
-        {
-            auto cloud = *last_cloud_;
-            cloud.header.stamp = stamp;
-            return cloud;
+    void EsdfMapNode::buildBotList() {
+        bots_.clear();
+        if (bot_ids_.empty()) {
+            RCLCPP_WARN(get_logger(), "No bot_ids specified, nothing will be fused.");
+            return;
         }
 
-        sensor_msgs::msg::PointCloud2 cloud;
-        cloud.header.stamp = stamp;
-        cloud.header.frame_id = "map_origin";
-        cloud.height = 1;
-        cloud.width = 0;
-        return cloud;
+        for (int id : bot_ids_) {
+            Bot bot;
+            bot.id = id;
+            bot.name = bot_prefix_ + std::to_string(id);
+            bot.cloud_topic = "/" + bot.name + "/" + bot_cloud_topic_;
+            bot.world_frame = bot.name + "/world";
+            bot.sensor_frame = bot.name + "/" + bot_sensor_frame_;
+
+            bots_.emplace(id, bot);
+
+            RCLCPP_INFO(get_logger(),
+                        "Configured bot %d: cloud_topic=%s, sensor_frame=%s",
+                        id, bot.cloud_topic.c_str(), bot.sensor_frame.c_str());
+        }
     }
 
-    nav_msgs::msg::OccupancyGrid EsdfMapNode::buildMockCostmap(const rclcpp::Time &stamp) const
-    {
-        const auto costmap = core_.buildCostmap(publish_count_);
-        return toOccupancyMsg(costmap, stamp);
+    void EsdfMapNode::setupSubscriptions() {
+        for (auto &kv : bots_) {
+            auto &bot = kv.second;
+            bot.sub = create_subscription<PointCloud2>(
+                bot.cloud_topic,
+                rclcpp::SensorDataQoS(),
+                [this, bot_id = bot.id](PointCloud2::SharedPtr msg) {
+                    handleCloud(bot_id, msg);
+                });
+        }
     }
 
-    void EsdfMapNode::handleQuery(
-        const std::shared_ptr<srv::QueryEsdf::Request> request,
-        std::shared_ptr<srv::QueryEsdf::Response> response)
-    {
-        const auto &p = request->position;
+    void EsdfMapNode::setupTimers() {
+        rclcpp::Clock::SharedPtr clock = this->get_clock();  // ROS / sim time clock
 
-        QueryRequest core_request;
-        core_request.position = {p.x, p.y, p.z};
-        core_request.max_range = request->max_range;
+        if (!integrate_every_cloud_ && esdf_update_rate_hz_ > 0.0) {
+            auto period = rclcpp::Duration::from_seconds(1.0 / esdf_update_rate_hz_);
+            esdf_update_timer_ = rclcpp::create_timer(
+                shared_from_this(), clock, period,
+                std::bind(&EsdfMapNode::esdfUpdateTimerCb, this)
+            );
+        }
 
-        const auto result = core_.query(core_request);
-        response->distance = result.distance;
-        response->gradient.x = result.gradient.x;
-        response->gradient.y = result.gradient.y;
-        response->gradient.z = result.gradient.z;
-        response->success = result.success;
-        response->message = result.message;
+        if (publish_rate_hz_ > 0.0) {
+            auto period = rclcpp::Duration::from_seconds(1.0 / publish_rate_hz_);
+            publish_timer_ = rclcpp::create_timer(
+                shared_from_this(), clock, period,
+                std::bind(&EsdfMapNode::publishTimerCb, this)
+            );
+        }
     }
 
-    nav_msgs::msg::OccupancyGrid EsdfMapNode::toOccupancyMsg(
-        const Costmap2d &costmap, const rclcpp::Time &stamp) const
+    void EsdfMapNode::setupService() {
+        query_srv_ = create_service<EsdfQuery>( "esdf/query",
+            std::bind(&EsdfMapNode::handleQuery, this,
+                      std::placeholders::_1, std::placeholders::_2));
+    }
+
+    void EsdfMapNode::handleCloud(int bot_id, const PointCloud2::SharedPtr msg) {
+        auto it = bots_.find(bot_id);
+        if (it == bots_.end()) {
+            RCLCPP_WARN(get_logger(), "Received cloud for unknown bot id %d", bot_id);
+            return;
+        }
+        if (!core_) return;
+
+        
+        Eigen::Isometry3d T_M_L; //TODO: Raycast not implemented
+        // const Bot &bot = it->second;
+        // if (!lookupLidarPose(bot.sensor_frame, msg->header.stamp, T_M_L)) {
+        //     return;
+        // }
+
+        PointCloud cloud_M;
+        pointCloud2ToPcl(*msg, cloud_M);
+        core_->integrateCloud(cloud_M, T_M_L);
+
+        if (integrate_every_cloud_) {
+            core_->updateEsdf();
+        }
+    }
+
+    bool EsdfMapNode::lookupLidarPose(const std::string &lidar_frame,
+                                      const rclcpp::Time &stamp,
+                                      Eigen::Isometry3d &T_M_L)
     {
-        nav_msgs::msg::OccupancyGrid msg;
-        msg.header.stamp = stamp;
-        msg.header.frame_id = "map_origin";
+        try {
+            auto tf = tf_buffer_->lookupTransform(
+                world_frame_, lidar_frame, stamp,
+                rclcpp::Duration::from_seconds(tf_timeout_sec_));
 
-        msg.info.resolution = costmap.resolution;
-        msg.info.width = costmap.width;
-        msg.info.height = costmap.height;
+            const auto &tr = tf.transform.translation;
+            const auto &qr = tf.transform.rotation;
+            Eigen::Quaterniond q(qr.w, qr.x, qr.y, qr.z);
+            Eigen::Vector3d t(tr.x, tr.y, tr.z);
 
-        const double offset = -0.5 * static_cast<double>(costmap.width) * costmap.resolution;
-        msg.info.origin.position.x = offset;
-        msg.info.origin.position.y = offset;
-        msg.info.origin.position.z = 0.0;
-        msg.info.origin.orientation.w = 1.0;
+            T_M_L = Eigen::Isometry3d::Identity();
+            T_M_L.linear() = q.toRotationMatrix();
+            T_M_L.translation() = t;
+            return true;
+        } catch (const tf2::TransformException &ex) {
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                                 "TF lookup failed (%s -> %s): %s",
+                                 world_frame_.c_str(), lidar_frame.c_str(), ex.what());
+            return false;
+        }
+    }
 
-        msg.data = costmap.data;
-        return msg;
+    void EsdfMapNode::esdfUpdateTimerCb() {
+        if (!core_) return;
+        core_->updateEsdf();
+    }
+
+    void EsdfMapNode::publishTimerCb() {
+        if (!core_) return;
+        if (publish_full_grid_) {
+            publishGrid();
+        }
+        if (publish_costmap_2d_) {
+            publishCostmap2D();
+        }
+    }
+
+    void EsdfMapNode::publishGrid() {
+        if (!esdf_grid_pub_) return;
+
+        std::vector<Voxel> voxels;
+        core_->getAllVoxels(voxels);
+
+        pcl::PointCloud<pcl::PointXYZI> pcl_cloud;
+        pcl_cloud.reserve(voxels.size());
+
+        for (const auto &v : voxels) {
+            if (!v.observed) continue;
+            pcl::PointXYZI p;
+            p.x = static_cast<float>(v.center.x());
+            p.y = static_cast<float>(v.center.y());
+            p.z = static_cast<float>(v.center.z());
+            p.intensity = v.distance;
+            pcl_cloud.push_back(p);
+        }
+
+        if (pcl_cloud.empty()) return;
+
+        pcl_cloud.width = pcl_cloud.size();
+        pcl_cloud.height = 1;
+        pcl_cloud.is_dense = false;
+
+        PointCloud2 msg;
+        pcl::toROSMsg(pcl_cloud, msg);
+        msg.header.stamp = this->get_clock()->now();
+        msg.header.frame_id = world_frame_;
+        esdf_grid_pub_->publish(msg);
+    }
+
+    void EsdfMapNode::publishCostmap2D() {
+        if (!costmap_pub_) return;
+
+        Slice2D slice;
+        core_->extractSlice(costmap_layer_z_, slice);
+
+        if (slice.dims.x() == 0 || slice.dims.y() == 0) return;
+
+        OccupancyGrid msg;
+        msg.header.stamp = this->get_clock()->now();
+        msg.header.frame_id = world_frame_;
+        fillCostmapMsg(slice, msg);
+        costmap_pub_->publish(msg);
+    }
+
+    void EsdfMapNode::pointCloud2ToPcl(const PointCloud2 &msg,
+                                       PointCloud &cloud_out) const
+    {
+        pcl::PCLPointCloud2 pcl_pc2;
+        pcl_conversions::toPCL(msg, pcl_pc2);
+        pcl::fromPCLPointCloud2(pcl_pc2, cloud_out);
+    }
+
+    void EsdfMapNode::fillCostmapMsg(const Slice2D &slice,
+                                     OccupancyGrid &grid_msg) const
+    {
+        grid_msg.info.resolution = static_cast<float>(slice.resolution);
+        grid_msg.info.width = static_cast<uint32_t>(slice.dims.x());
+        grid_msg.info.height = static_cast<uint32_t>(slice.dims.y());
+        grid_msg.info.origin.position.x = slice.origin.x();
+        grid_msg.info.origin.position.y = slice.origin.y();
+        grid_msg.info.origin.position.z = costmap_layer_z_;
+        grid_msg.info.origin.orientation.w = 1.0;
+        grid_msg.info.origin.orientation.x = 0.0;
+        grid_msg.info.origin.orientation.y = 0.0;
+        grid_msg.info.origin.orientation.z = 0.0;
+
+        const int nx = slice.dims.x();
+        const int ny = slice.dims.y();
+
+        grid_msg.data.resize(static_cast<size_t>(nx * ny));
+
+        for (int y = 0; y < ny; ++y) {
+            for (int x = 0; x < nx; ++x) {
+                int idx = y * nx + x;
+                float d = slice.distances[idx];
+
+                int8_t cost = 0;
+                if (d >= static_cast<float>(costmap_free_distance_)) {
+                    cost = 0;
+                } else if (d <= static_cast<float>(costmap_lethal_distance_)) {
+                    cost = 100;
+                } else {
+                    double t = (d - costmap_lethal_distance_) /
+                               (costmap_free_distance_ - costmap_lethal_distance_);
+                    t = std::clamp(t, 0.0, 1.0);
+                    cost = static_cast<int8_t>(std::lround(100.0 * (1.0 - t)));
+                }
+                grid_msg.data[idx] = cost;
+            }
+        }
+    }
+
+    void EsdfMapNode::handleQuery(const std::shared_ptr<EsdfQuery::Request> request,
+                                  std::shared_ptr<EsdfQuery::Response> response)
+    {
+        response->success = false;
+        response->observed = false;
+        response->distance = 0.0f;
+        response->gradient.x = 0.0;
+        response->gradient.y = 0.0;
+        response->gradient.z = 0.0;
+
+        if (!core_) return;
+
+        std::string frame = request->frame_id;
+        if (frame.empty()) {
+            frame = world_frame_;
+        }
+
+        Eigen::Vector3d p_M;
+
+        if (frame == world_frame_) {
+            p_M = Eigen::Vector3d(
+                request->position.x,
+                request->position.y,
+                request->position.z);
+        } else {
+            try {
+                auto tf = tf_buffer_->lookupTransform(
+                    world_frame_, frame, rclcpp::Time(0),
+                    rclcpp::Duration::from_seconds(tf_timeout_sec_));
+                const auto &tr = tf.transform.translation;
+                const auto &qr = tf.transform.rotation;
+                Eigen::Quaterniond q(qr.w, qr.x, qr.y, qr.z);
+                Eigen::Vector3d t(tr.x, tr.y, tr.z);
+                Eigen::Vector3d p_local(
+                    request->position.x,
+                    request->position.y,
+                    request->position.z);
+                p_M = q * p_local + t;
+            } catch (const tf2::TransformException &ex) {
+                RCLCPP_WARN(get_logger(),
+                            "ESDF query TF error (%s -> %s): %s",
+                            world_frame_.c_str(), frame.c_str(), ex.what());
+                return;
+            }
+        }
+
+        double dist;
+        Eigen::Vector3d grad;
+        if (!core_->queryDistanceAndGradient(p_M, dist, grad)) {
+            return;
+        }
+
+        response->success = true;
+        response->distance = static_cast<float>(dist);
+        response->gradient.x = grad.x();
+        response->gradient.y = grad.y();
+        response->gradient.z = grad.z();
+        response->observed = core_->isObserved(p_M);
     }
 
 } // namespace esdf_map

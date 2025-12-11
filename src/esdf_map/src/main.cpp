@@ -1,5 +1,4 @@
 #include "esdf_map/esdf_map_node.hpp"
-
 #include <rclcpp/rclcpp.hpp>
 
 int main(int argc, char **argv)

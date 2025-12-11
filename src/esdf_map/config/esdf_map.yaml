@@ -1,15 +1,37 @@
 esdf_map_node:
   ros__parameters:
 
-    bot_prefix: "bot"                     # matches bot1/... bot2/...
-    bot_cloud_topic: "/cloud_registered"  # PointCloud2 transformated in the world_frame frame
-    bot_sensor_frame: "lidar_link"        # botX/lidar_link
+    # --- Robot inputs ---
+    bot_prefix: "bot"                # "bot" -> bot1, bot2, ...
+    bot_ids: [1, 2, 3]               # robots that should be fused
+    bot_cloud_topic: "cloud_registered"  # /botX/<this>
+    bot_sensor_frame: "lidar_link"   # botX/<this>
+    world_frame: "map_origin"        # global ESDF frame
+    tf_timeout_sec: 0.1              # TF lookup timeout [s]
 
-    world_frame: "map_origin"             # your global/map frame
+    # --- Map geometry (global ESDF grid in world_frame) ---
+    esdf_resolution: 0.1             # [m] voxel size
+    map_size_x: 30.0                 # [m]
+    map_size_y: 30.0                 # [m]
+    map_size_z: 5.0                  # [m]
+    map_origin_x: -15.0              # [m]
+    map_origin_y: -15.0              # [m]
+    map_origin_z: 0.0                # [m]
 
-    publish_rate_hz: 0.5
+    # --- TSDF / occupancy integration ---
+    max_ray_length: 30.0             # [m] limit ray casting #TODO unused in simple core
+    truncation_distance: 0.3         # [m] TSDF truncation band  #TODO unused in simple core
+    esdf_max_distance: 5.0           # [m] clamp ESDF values
 
-    esdf_resolution: 0.1
-    esdf_size_m: 30.0
+    # --- ESDF update strategy ---
+    integrate_every_cloud: true      # update ESDF after every cloud
+    esdf_update_rate_hz: 2.0         # used if integrate_every_cloud = false
 
-    costmap_level_m: 1.0                  # for visualization costmap slice
+    # --- Output / visualization ---
+    publish_rate_hz: 1.0             # [Hz] publish grid & costmap
+    publish_full_grid: true          # enable /esdf/grid
+    publish_costmap_2d: true         # enable /esdf/costmap_2d
+
+    costmap_layer_z: 0.5             # [m] slice height in world_frame
+    costmap_free_distance: 0.5       # [m] dist >= free -> cost=0
+    costmap_lethal_distance: 0.1     # [m] dist <= lethal -> cost=100

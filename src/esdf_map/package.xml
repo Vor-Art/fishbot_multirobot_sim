@@ -12,11 +12,13 @@
   <depend>sensor_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>pcl_conversions</depend>
 
-  <!-- Message generation for local msgs -->
+  <!-- Message generation for local srv -->
   <build_depend>rosidl_default_generators</build_depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
-
 
   <export>
     <build_type>ament_cmake</build_type>
