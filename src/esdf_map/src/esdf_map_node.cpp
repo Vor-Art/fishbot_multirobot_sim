@@ -348,7 +348,8 @@ namespace esdf_map
     }
 
     bool EsdfMapNode::computeTimingStats(const std::string &name, double &mean_ms,
-                                         double &std_ms, std::size_t &count)
+                                         double &std_ms, double &max_ms,
+                                         std::size_t &count)
     {
         auto it = timing_history_.find(name);
         if (it == timing_history_.end() || it->second.empty()) {
@@ -358,14 +359,17 @@ namespace esdf_map
         const auto &buffer = it->second;
         double sum = 0.0;
         double sum_sq = 0.0;
+        double max_val = 0.0;
         for (const auto &p : buffer) {
             sum += p.second;
             sum_sq += p.second * p.second;
+            max_val = std::max(max_val, static_cast<double>(p.second));
         }
         count = buffer.size();
         mean_ms = sum / static_cast<double>(count);
         const double var = std::max(0.0, sum_sq / static_cast<double>(count) - mean_ms * mean_ms);
         std_ms = std::sqrt(var);
+        max_ms = max_val;
         return true;
     }
 
@@ -374,26 +378,28 @@ namespace esdf_map
         std::ostringstream oss;
         auto secs = std::chrono::duration_cast<std::chrono::seconds>(timing_window_).count();
         oss << "[time " << secs << "s]\n";
-        oss << "-------------------------------------------------\n";
+        oss << "--------------------------------------------------------\n";
         oss << "  " << std::left << std::setw(21) << "Key"
-            << std::right << std::setw(8) << "Mean(ms)"
-            << std::setw(8) << "Std(ms)"
-            << std::setw(8) << "Count" << "\n";
-        oss << "-------------------------------------------------\n";
+            << std::right << std::setw(8) << "Mean"
+            << std::setw(8) << "Std"
+            << std::setw(8) << "Max"
+            << std::setw(8) << "Count" << "  (ms)\n";
+        oss << "--------------------------------------------------------\n";
 
         for (const auto &[k,_] : timing_history_) {
-            double mean = 0.0, stddev = 0.0;
+            double mean = 0.0, stddev = 0.0, maxv = 0.0;
             std::size_t n = 0;
 
-            if (computeTimingStats(k, mean, stddev, n)) {
+            if (computeTimingStats(k, mean, stddev, maxv, n)) {
                 oss << "  " << std::left << std::setw(21) << k
                     << std::right << std::setw(8) << std::fixed << std::setprecision(1) << mean
                     << std::setw(8) << std::setprecision(1) << stddev
+                    << std::setw(8) << std::setprecision(1) << maxv
                     << std::setw(8) << n << "\n";
             }
         }
 
-        oss << "-------------------------------------------------\n";
+        oss << "--------------------------------------------------------\n";
         RCLCPP_INFO(get_logger(), "%s", oss.str().c_str());
     }
 

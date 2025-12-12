@@ -77,7 +77,8 @@ namespace esdf_map
                           std::chrono::steady_clock::duration duration);
         void logTimingReport();
         bool computeTimingStats(const std::string &name, double &mean_ms,
-                                double &std_ms, std::size_t &count);
+                                double &std_ms, double &max_ms,
+                                std::size_t &count);
 
         // Core map
         std::unique_ptr<EsdfMapCore> core_;
