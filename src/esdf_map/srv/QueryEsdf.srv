@@ -1,0 +1,7 @@
+geometry_msgs/Point position
+string frame_id
+---
+bool success
+float32 distance
+geometry_msgs/Vector3 gradient
+bool observed
