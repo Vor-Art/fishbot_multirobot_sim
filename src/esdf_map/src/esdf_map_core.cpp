@@ -364,8 +364,6 @@ namespace esdf_map {
             for (int i = 0; i < impl_->num_voxels; ++i) {
                 if (impl_->distance_grid[i] == 0.0f) {
                     q.push(i);
-                } else {
-                    impl_->distance_grid[i] = inf;
                 }
             }
 
@@ -403,87 +401,59 @@ namespace esdf_map {
         // 2) Chamfer relax (12 dir)
         // -------------------------
         if (config_.enable_chamfer_relax) 
-        {
+        {   
             // Flat index strides
             const int stride_x = 1;
             const int stride_y = nx;
             const int stride_z = nx * ny;
 
-            struct Offset {
-                int dx, dy, dz;
-                int dIndex;  // flat index delta
+            struct Offset { int dx, dy, dz, dIndex; };
+            auto make = [&](int dx, int dy, int dz) {
+                return Offset{dx, dy, dz, dx*stride_x + dy*stride_y + dz*stride_z};
             };
 
-            // 12 semi-diagonal neighbors: (±1,±1,0), (±1,0,±1), (0,±1,±1)
-            std::array<Offset, 12> semi{{
-                {  1,  1,  0, 0 }, {  1, -1,  0, 0 },
-                { -1,  1,  0, 0 }, { -1, -1,  0, 0 },
-                {  1,  0,  1, 0 }, {  1,  0, -1, 0 },
-                { -1,  0,  1, 0 }, { -1,  0, -1, 0 },
-                {  0,  1,  1, 0 }, {  0,  1, -1, 0 },
-                {  0, -1,  1, 0 }, {  0, -1, -1, 0 }
+            std::array<Offset, 6> semi_fwd {{
+                make( 1,-1, 0), make(-1,-1, 0),
+                make( 1, 0,-1), make(-1, 0,-1),
+                make( 0, 1,-1), make( 0,-1,-1)
             }};
+            std::array<Offset, 6> semi_bwd {{
+                make( 1, 1, 0), make(-1, 1, 0),
+                make( 1, 0, 1), make(-1, 0, 1),
+                make( 0, 1, 1), make( 0,-1, 1)
+            }};
+            const float semi_w = static_cast<float>(config_.resolution * std::sqrt(2.0f));
 
-            // Precompute flat index deltas for all offsets
-            for (auto &o : semi) {
-                o.dIndex = o.dx * stride_x + o.dy * stride_y + o.dz * stride_z;
-            }
-
-            auto in_bounds = [&](int x, int y, int z) {
-                return (0 <= x && x < nx) && 
-                    (0 <= y && y < ny) &&
-                    (0 <= z && z < nz);
-            };
-
-            const float semi_w = static_cast<float>(config_.resolution * std::sqrt(2.0));
-
-            auto relax_voxel = [&](int idx, int x, int y, int z) {
+            auto relax_voxel = [&](int idx, const auto& mask) {
                 float current = impl_->distance_grid[idx];
-                for (const auto& o : semi) {
-                    const int nx_i = x + o.dx;
-                    const int ny_i = y + o.dy;
-                    const int nz_i = z + o.dz;
-                    if (!in_bounds(nx_i, ny_i, nz_i)) continue;
-
-                    const int n_idx = idx + o.dIndex;
-                    const float tentative = impl_->distance_grid[n_idx] + semi_w;
-                    if (tentative < current && tentative <= max_dist) {
-                        current = tentative;
-                    }
+                for (const auto& o : mask) {
+                    const float tentative = impl_->distance_grid[idx + o.dIndex] + semi_w;
+                    if (tentative < current && tentative <= max_dist) current = tentative;
                 }
                 impl_->distance_grid[idx] = current;
             };
-
             // Forward sweep
-            {
-                int idx = 0;
-                for (int z = 0; z < nz; ++z) {
-                    for (int y = 0; y < ny; ++y) {
-                        for (int x = 0; x < nx; ++x, ++idx) {
-                            relax_voxel(idx, x, y, z);
-                        }
+            for (int z = 1; z <= nz - 2; ++z) {
+                for (int y = 1; y <= ny - 2; ++y) {
+                    int idx = z * stride_z + y * stride_y + stride_x;
+                    for (int x = 1; x <= nx - 2; ++x, ++idx) {
+                        relax_voxel(idx, semi_fwd);
                     }
                 }
             }
             // Backward sweep
-            for (int z = nz - 1; z >= 0; --z) {
-                for (int y = ny - 1; y >= 0; --y) {
-                    const int base = z * stride_z + y * stride_y;
-                    for (int x = nx - 1; x >= 0; --x) {
-                        const int idx = base + x;
-                        relax_voxel(idx, x, y, z);
+            for (int z = nz - 2; z >= 1; --z) {
+                for (int y = ny - 2; y >= 1; --y) {
+                    int idx = z * stride_z + y * stride_y + (nx - 2) * stride_x;
+                    for (int x = nx - 2; x >= 1; --x, --idx) {
+                        relax_voxel(idx, semi_bwd);
                     }
                 }
             }
         }
         // ------------------------
-        // 3) Clamp & mark region
+        // 3) Mark region
         // ------------------------
-        for (int i = 0; i < impl_->num_voxels; ++i) {
-            if (impl_->distance_grid[i] > max_dist) {
-                impl_->distance_grid[i] = max_dist;
-            }
-        }
 
         impl_->pending_region.min_index = Vec3i(0, 0, 0);
         impl_->pending_region.max_index = Vec3i(nx - 1, ny - 1, nz - 1);
