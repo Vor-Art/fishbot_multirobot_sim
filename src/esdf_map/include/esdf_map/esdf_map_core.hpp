@@ -40,6 +40,17 @@ namespace esdf_map
         Vec3i min_index = Vec3i::Zero(); // inclusive
         Vec3i max_index = Vec3i::Zero(); // inclusive
         bool valid = false;
+
+        inline void clamp(const Vec3i& min_c, const Vec3i& max_c) {
+            min_index = min_index.cwiseMax(min_c);
+            max_index = max_index.cwiseMin(max_c);
+        }
+
+        inline void expand(int margin_vox) {
+            if (!valid) return;
+            min_index.array() -= margin_vox;
+            max_index.array() += margin_vox;
+        }
     };
 
     class EsdfMapCore {

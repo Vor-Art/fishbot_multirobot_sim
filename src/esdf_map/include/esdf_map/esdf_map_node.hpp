@@ -76,7 +76,7 @@ namespace esdf_map
         void recordTiming(const std::string &name,
                           std::chrono::steady_clock::duration duration);
         void logTimingReport();
-        bool computeTimingStats(const std::string &name, double &mean_ms,
+        bool computeTimingStats(const std::string &name, double &curr, double &mean_ms,
                                 double &std_ms, double &max_ms,
                                 std::size_t &count);
 

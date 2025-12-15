@@ -10,7 +10,7 @@ esdf_map_node:
     tf_timeout_sec: 0.1              # TF lookup timeout [s]
 
     # --- Map geometry (global ESDF grid in world_frame) ---
-    esdf_resolution: 0.2             # [m] voxel size
+    esdf_resolution: 0.15             # [m] voxel size
     map_size_x: 20.0                 # [m]
     map_size_y: 15.0                 # [m]
     map_size_z: 5.0                  # [m]
@@ -22,7 +22,7 @@ esdf_map_node:
     max_ray_length: 30.0             # [m] limit ray casting #TODO unused in simple core
     truncation_distance: 0.3         # [m] TSDF truncation band  #TODO unused in simple core
     esdf_max_distance: 5.0           # [m] clamp ESDF values
-    enable_chamfer_relax: false       # enabple more accurate result
+    enable_chamfer_relax: true       # enabple more accurate result
 
     # --- ESDF update strategy ---
     integrate_every_cloud: false     # update ESDF after every cloud

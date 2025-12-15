@@ -2,6 +2,7 @@
 #include "esdf_map/utils.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <queue>
@@ -14,7 +15,10 @@ namespace esdf_map {
         std::vector<float> weight_grid;
         std::vector<uint8_t> observed_grid;
 
-        UpdateRegion pending_region;
+        std::queue<int> new_obstacles; // Queue to mark new obstacles since last updateEsdf()
+        UpdateRegion dirty_region;    // Region that got new observations since last updateEsdf()
+        UpdateRegion pending_region;  // Region to publish since last getAllVoxels()
+
         int num_voxels = 0;
     };
 
@@ -257,6 +261,7 @@ namespace esdf_map {
                 }
             }
         }
+        impl_->pending_region.valid = false;
     }
 
     void EsdfMapCore::extractSlice(double z_M, Slice2D &slice) const {
@@ -299,81 +304,67 @@ namespace esdf_map {
     void EsdfMapCore::integrateCloud(const PointCloud &cloud_M, const Eigen::Isometry3d &T_M_L) {
         (void)T_M_L; // currently unused; kept for future raycasting.
 
-        Vec3i min_idx(std::numeric_limits<int>::max(),
-                      std::numeric_limits<int>::max(),
-                      std::numeric_limits<int>::max());
-        Vec3i max_idx(-1, -1, -1);
-        bool any = false;
-
         for (const auto &p : cloud_M.points) {
-            if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z)) {
-                continue;
-            }
-
-            Vec3d p_M(p.x, p.y, p.z);
+            const Vec3d p_M(p.x, p.y, p.z);
             Vec3i idx = worldToIndex(p_M, config_.origin, config_.resolution);
-            if (!isInsideIndex(idx, config_.dims)) {
-                continue;
-            }
+            if (!isInsideIndex(idx, config_.dims)) continue;
 
             int linear = flattenIndex(idx, config_.dims);
+
+            if (impl_->distance_grid[linear] == 0.0f) continue;
 
             impl_->distance_grid[linear] = 0.0f; // mark as obstacle
             impl_->weight_grid[linear] += 1.0f;
             impl_->observed_grid[linear] = 1u;
+            impl_->new_obstacles.push(linear); // add to BFS queue
 
-            if (!any) {
-                min_idx = max_idx = idx;
-                any = true;
+            if (!impl_->dirty_region.valid) {
+                impl_->dirty_region.min_index = idx;
+                impl_->dirty_region.max_index = idx;
+                impl_->dirty_region.valid = true;
             } else {
-                min_idx = min_idx.cwiseMin(idx);
-                max_idx = max_idx.cwiseMax(idx);
-            }
-        }
-
-        if (any) {
-            if (!impl_->pending_region.valid) {
-                impl_->pending_region.min_index = min_idx;
-                impl_->pending_region.max_index = max_idx;
-                impl_->pending_region.valid = true;
-            }
-            else {
-                impl_->pending_region.min_index =
-                    impl_->pending_region.min_index.cwiseMin(min_idx);
-                impl_->pending_region.max_index =
-                    impl_->pending_region.max_index.cwiseMax(max_idx);
+                impl_->dirty_region.min_index = impl_->dirty_region.min_index.cwiseMin(idx);
+                impl_->dirty_region.max_index = impl_->dirty_region.max_index.cwiseMax(idx);
             }
         }
     }
 
     // Multi-source BFS (6-neighborhood) + chamfer relax (12).
     void EsdfMapCore::updateEsdf() {
+        if (impl_->new_obstacles.empty()) return;
+        if (!impl_->dirty_region.valid) return;
+
         const int nx = config_.dims.x();
         const int ny = config_.dims.y();
         const int nz = config_.dims.z();
 
         const float max_dist = static_cast<float>(config_.esdf_max_distance);
-        const float inf = max_dist + 2.0f * static_cast<float>(config_.resolution);
+        const float res = static_cast<float>(config_.resolution);
 
+
+        const int margin_vox = static_cast<int>(std::ceil(max_dist / res)) + 2;
+        UpdateRegion& roi = impl_->dirty_region;
+        roi.expand(margin_vox);
+        roi.clamp({0,0,0},{nx-1,ny-1,nz-1});
+
+        UpdateRegion roi_chamfer = roi;
+        roi_chamfer.clamp({1,1,1},{nx-2,ny-2,nz-2});
+        
         // -------------------------
         // 1) Multi-source BFS (6)
         // -------------------------
         {
             std::queue<int> q;
+            impl_->new_obstacles.swap(q);
 
-            for (int i = 0; i < impl_->num_voxels; ++i) {
-                if (impl_->distance_grid[i] == 0.0f) {
-                    q.push(i);
-                }
-            }
 
             auto push_neighbor = [&](int x, int y, int z, int cur_idx) {
                 if (x < 0 || x >= nx || y < 0 || y >= ny || z < 0 || z >= nz) {
                     return;
                 }
                 Eigen::Vector3i idx_3d(x, y, z);
-                int idx = flattenIndex(idx_3d, config_.dims);
-                float tentative = impl_->distance_grid[cur_idx] + static_cast<float>(config_.resolution);
+                const int idx = flattenIndex(idx_3d, config_.dims);
+                const float tentative = impl_->distance_grid[cur_idx] + res;
                 if (tentative < impl_->distance_grid[idx] && tentative <= max_dist) {
                     impl_->distance_grid[idx] = tentative;
                     q.push(idx);
@@ -381,13 +372,13 @@ namespace esdf_map {
             };
 
             while (!q.empty()) {
-                int cur = q.front();
+                const int cur = q.front();
                 q.pop();
 
-                int z = cur / (nx * ny);
-                int rem = cur - z * nx * ny;
-                int y = rem / nx;
-                int x = rem - y * nx;
+                const int z = cur / (nx * ny);
+                const int rem = cur - z * nx * ny;
+                const int y = rem / nx;
+                const int x = rem - y * nx;
 
                 push_neighbor(x + 1, y, z, cur);
                 push_neighbor(x - 1, y, z, cur);
@@ -400,8 +391,8 @@ namespace esdf_map {
         // -------------------------
         // 2) Chamfer relax (12 dir)
         // -------------------------
-        if (config_.enable_chamfer_relax) 
-        {   
+        if (config_.enable_chamfer_relax && nx >= 3 && ny >= 3 && nz >= 3) 
+        {
             // Flat index strides
             const int stride_x = 1;
             const int stride_y = nx;
@@ -422,7 +413,7 @@ namespace esdf_map {
                 make( 1, 0, 1), make(-1, 0, 1),
                 make( 0, 1, 1), make( 0,-1, 1)
             }};
-            const float semi_w = static_cast<float>(config_.resolution * std::sqrt(2.0f));
+            const float semi_w = static_cast<float>(res * std::sqrt(2.0f));
 
             auto relax_voxel = [&](int idx, const auto& mask) {
                 float current = impl_->distance_grid[idx];
@@ -432,20 +423,28 @@ namespace esdf_map {
                 }
                 impl_->distance_grid[idx] = current;
             };
-            // Forward sweep
-            for (int z = 1; z <= nz - 2; ++z) {
-                for (int y = 1; y <= ny - 2; ++y) {
-                    int idx = z * stride_z + y * stride_y + stride_x;
-                    for (int x = 1; x <= nx - 2; ++x, ++idx) {
+
+            const int x0 = roi_chamfer.min_index.x();
+            const int x1 = roi_chamfer.max_index.x();
+            const int y0 = roi_chamfer.min_index.y();
+            const int y1 = roi_chamfer.max_index.y();
+            const int z0 = roi_chamfer.min_index.z();
+            const int z1 = roi_chamfer.max_index.z();
+
+            // Forward sweep (ROI)
+            for (int z = z0; z <= z1; ++z) {
+                for (int y = y0; y <= y1; ++y) {
+                    int idx = z * stride_z + y * stride_y + x0 * stride_x;
+                    for (int x = x0; x <= x1; ++x, ++idx) {
                         relax_voxel(idx, semi_fwd);
                     }
                 }
             }
-            // Backward sweep
-            for (int z = nz - 2; z >= 1; --z) {
-                for (int y = ny - 2; y >= 1; --y) {
-                    int idx = z * stride_z + y * stride_y + (nx - 2) * stride_x;
-                    for (int x = nx - 2; x >= 1; --x, --idx) {
+            // Backward sweep (ROI)
+            for (int z = z1; z >= z0; --z) {
+                for (int y = y1; y >= y0; --y) {
+                    int idx = z * stride_z + y * stride_y + x1 * stride_x;
+                    for (int x = x1; x >= x0; --x, --idx) {
                         relax_voxel(idx, semi_bwd);
                     }
                 }
@@ -454,10 +453,17 @@ namespace esdf_map {
         // ------------------------
         // 3) Mark region
         // ------------------------
+        if (!impl_->pending_region.valid) {
+            impl_->pending_region = roi;
+            impl_->pending_region.valid = true;
+        } else {
+            impl_->pending_region.min_index = 
+                impl_->pending_region.min_index.cwiseMin(roi.min_index);
+            impl_->pending_region.max_index = 
+                impl_->pending_region.max_index.cwiseMax(roi.max_index);
+        }
 
-        impl_->pending_region.min_index = Vec3i(0, 0, 0);
-        impl_->pending_region.max_index = Vec3i(nx - 1, ny - 1, nz - 1);
-        impl_->pending_region.valid = true;
+        roi.valid = false;
     }
 
 } // namespace esdf_map

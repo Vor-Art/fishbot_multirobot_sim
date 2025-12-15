@@ -230,12 +230,14 @@ namespace esdf_map
     }
 
     void EsdfMapNode::publishGrid() {
-        const auto t_total_start = std::chrono::steady_clock::now();
         if (!esdf_grid_pub_) return;
-
+        
+        const auto t_get_voxels = std::chrono::steady_clock::now();
         std::vector<Voxel> voxels;
         core_->getAllVoxels(voxels);
+        recordTiming("get_voxels", std::chrono::steady_clock::now() - t_get_voxels);
 
+        const auto t_publish_esdf = std::chrono::steady_clock::now();
         pcl::PointCloud<pcl::PointXYZI> pcl_cloud;
         pcl_cloud.reserve(voxels.size());
 
@@ -260,7 +262,7 @@ namespace esdf_map
         msg.header.stamp = this->get_clock()->now();
         msg.header.frame_id = world_frame_;
         esdf_grid_pub_->publish(msg);
-        recordTiming("publish_esdf", std::chrono::steady_clock::now() - t_total_start);
+        recordTiming("publish_esdf", std::chrono::steady_clock::now() - t_publish_esdf);
     }
 
     void EsdfMapNode::publishCostmap2D() {
@@ -347,7 +349,7 @@ namespace esdf_map
         (void)buffer;
     }
 
-    bool EsdfMapNode::computeTimingStats(const std::string &name, double &mean_ms,
+    bool EsdfMapNode::computeTimingStats(const std::string &name, double &curr, double &mean_ms,
                                          double &std_ms, double &max_ms,
                                          std::size_t &count)
     {
@@ -365,6 +367,7 @@ namespace esdf_map
             sum_sq += p.second * p.second;
             max_val = std::max(max_val, static_cast<double>(p.second));
         }
+        curr = buffer[buffer.size()-1].second;
         count = buffer.size();
         mean_ms = sum / static_cast<double>(count);
         const double var = std::max(0.0, sum_sq / static_cast<double>(count) - mean_ms * mean_ms);
@@ -380,22 +383,26 @@ namespace esdf_map
         oss << "[time " << secs << "s]\n";
         oss << "--------------------------------------------------------\n";
         oss << "  " << std::left << std::setw(21) << "Key"
-            << std::right << std::setw(8) << "Mean"
-            << std::setw(8) << "Std"
-            << std::setw(8) << "Max"
-            << std::setw(8) << "Count" << "  (ms)\n";
+            << std::right 
+            << std::setw(6) << "Curr"
+            << std::setw(6) << "Mean"
+            << std::setw(6) << "Std"
+            << std::setw(6) << "Max"
+            << std::setw(5) << "#" << "  (ms)\n";
         oss << "--------------------------------------------------------\n";
 
         for (const auto &[k,_] : timing_history_) {
-            double mean = 0.0, stddev = 0.0, maxv = 0.0;
+            double curr = 0.0, mean = 0.0, stddev = 0.0, maxv = 0.0;
             std::size_t n = 0;
 
-            if (computeTimingStats(k, mean, stddev, maxv, n)) {
+            if (computeTimingStats(k, curr, mean, stddev, maxv, n)) {
                 oss << "  " << std::left << std::setw(21) << k
-                    << std::right << std::setw(8) << std::fixed << std::setprecision(1) << mean
-                    << std::setw(8) << std::setprecision(1) << stddev
-                    << std::setw(8) << std::setprecision(1) << maxv
-                    << std::setw(8) << n << "\n";
+                    << std::right << std::fixed 
+                    << std::setw(6) << std::setprecision(1) << curr
+                    << std::setw(6) << std::setprecision(1) << mean
+                    << std::setw(6) << std::setprecision(1) << stddev
+                    << std::setw(6) << std::setprecision(1) << maxv
+                    << std::setw(5) << n << "\n";
             }
         }
 
