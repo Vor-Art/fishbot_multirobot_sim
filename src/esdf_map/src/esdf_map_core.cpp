@@ -252,7 +252,7 @@ namespace esdf_map {
         for (int z = 0; z < config_.dims.z(); ++z) {
             for (int y = 0; y < config_.dims.y(); ++y) {
                 for (int x = 0; x < config_.dims.x(); ++x, ++linear) {
-                    Eigen::Vector3i idx(x, y, z);
+                    Vec3i idx(x, y, z);
                     Voxel &v = voxels[linear];
                     v.center   = indexToCenter(idx, config_.origin, config_.resolution);
                     v.distance = impl_->distance_grid[linear];
@@ -287,7 +287,7 @@ namespace esdf_map {
 
         for (int y = 0; y < ny; ++y) {
             for (int x = 0; x < nx; ++x) {
-                Eigen::Vector3i idx(x, y, iz);
+                Vec3i idx(x, y, iz);
                 int index_3d = flattenIndex(idx, config_.dims);
                 int index_2d = y * nx + x;
                 slice.distances[index_2d] = impl_->distance_grid[index_3d];
@@ -362,7 +362,7 @@ namespace esdf_map {
                 if (x < 0 || x >= nx || y < 0 || y >= ny || z < 0 || z >= nz) {
                     return;
                 }
-                Eigen::Vector3i idx_3d(x, y, z);
+                Vec3i idx_3d(x, y, z);
                 const int idx = flattenIndex(idx_3d, config_.dims);
                 const float tentative = impl_->distance_grid[cur_idx] + res;
                 if (tentative < impl_->distance_grid[idx] && tentative <= max_dist) {

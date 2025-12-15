@@ -84,12 +84,12 @@ namespace esdf_map
     EsdfMapCore::Config EsdfMapNode::makeCoreConfig() const {
         EsdfMapCore::Config cfg;
         cfg.resolution = esdf_resolution_;
-        cfg.origin = Eigen::Vector3d(map_origin_x_, map_origin_y_, map_origin_z_);
+        cfg.origin = Vec3d(map_origin_x_, map_origin_y_, map_origin_z_);
 
         auto nx = static_cast<int>(std::round(map_size_x_ / esdf_resolution_));
         auto ny = static_cast<int>(std::round(map_size_y_ / esdf_resolution_));
         auto nz = static_cast<int>(std::round(map_size_z_ / esdf_resolution_));
-        cfg.dims = Eigen::Vector3i(std::max(nx, 1), std::max(ny, 1), std::max(nz, 1));
+        cfg.dims = Vec3i(std::max(nx, 1), std::max(ny, 1), std::max(nz, 1));
 
         cfg.max_ray_length = max_ray_length_;
         cfg.truncation_distance = truncation_distance_;
@@ -197,7 +197,7 @@ namespace esdf_map
             const auto &tr = tf.transform.translation;
             const auto &qr = tf.transform.rotation;
             Eigen::Quaterniond q(qr.w, qr.x, qr.y, qr.z);
-            Eigen::Vector3d t(tr.x, tr.y, tr.z);
+            Vec3d t(tr.x, tr.y, tr.z);
 
             T_M_L = Eigen::Isometry3d::Identity();
             T_M_L.linear() = q.toRotationMatrix();
@@ -427,10 +427,10 @@ namespace esdf_map
             frame = world_frame_;
         }
 
-        Eigen::Vector3d p_M;
+        Vec3d p_M;
 
         if (frame == world_frame_) {
-            p_M = Eigen::Vector3d(
+            p_M = Vec3d(
                 request->position.x,
                 request->position.y,
                 request->position.z);
@@ -442,8 +442,8 @@ namespace esdf_map
                 const auto &tr = tf.transform.translation;
                 const auto &qr = tf.transform.rotation;
                 Eigen::Quaterniond q(qr.w, qr.x, qr.y, qr.z);
-                Eigen::Vector3d t(tr.x, tr.y, tr.z);
-                Eigen::Vector3d p_local(
+                Vec3d t(tr.x, tr.y, tr.z);
+                Vec3d p_local(
                     request->position.x,
                     request->position.y,
                     request->position.z);
@@ -457,7 +457,7 @@ namespace esdf_map
         }
 
         double dist;
-        Eigen::Vector3d grad;
+        Vec3d grad;
         if (!core_->queryDistanceAndGradient(p_M, dist, grad)) {
             return;
         }
