@@ -15,7 +15,10 @@
 #include <rclcpp/create_timer.hpp>
 
 #include <geometry_msgs/msg/transform_stamped.hpp>
+
 #include <tf2/exceptions.h>
+#include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 using namespace std::chrono_literals;
 
@@ -33,7 +36,10 @@ namespace esdf_map
         EsdfMapCore::Config cfg = makeCoreConfig();
         core_ = std::make_unique<EsdfMapCore>(cfg);
 
-        buildBotList();
+        bots_.clear();
+        if (input_mode_ == "robots") {
+            buildBotList();
+        }
 
         esdf_grid_pub_ = create_publisher<PointCloud2>(
             "/esdf/grid", rclcpp::QoS(1).transient_local());
@@ -46,13 +52,26 @@ namespace esdf_map
         setupTimers();
         setupService();
 
-        RCLCPP_INFO(get_logger(), "esdf_map_node initialized with %zu bots", bots_.size());
+        if (input_mode_ == "robots") {
+            RCLCPP_INFO(get_logger(), "esdf_map_node initialized in ROBOTS mode with %zu bots", bots_.size());
+        } else {
+            RCLCPP_INFO(get_logger(), "esdf_map_node initialized in CLOUD mode: topic=%s frame=%s",
+                        cloud_topic_.c_str(), cloud_frame_.c_str());
+        }
     }
 
     void EsdfMapNode::declareAndLoadParams() {
+        input_mode_   = declare_parameter<std::string>("input_mode", "robots");
+    
+        cloud_topic_  = declare_parameter<std::string>("cloud_topic", "/global_downsampled_map");
+        cloud_frame_  = declare_parameter<std::string>("cloud_frame", "map_origin");
+
+
         bot_prefix_ = declare_parameter<std::string>("bot_prefix", "bot");
         bot_cloud_topic_ = declare_parameter<std::string>("bot_cloud_topic", "cloud_registered");
+        bot_cloud_frame_ = declare_parameter<std::string>("bot_cloud_frame", "world");
         bot_sensor_frame_ = declare_parameter<std::string>("bot_sensor_frame", "lidar_link");
+
         world_frame_ = declare_parameter<std::string>("world_frame", "map_origin");
         tf_timeout_sec_ = declare_parameter<double>("tf_timeout_sec", 0.1);
 
@@ -104,7 +123,7 @@ namespace esdf_map
     void EsdfMapNode::buildBotList() {
         bots_.clear();
         if (bot_ids_.empty()) {
-            RCLCPP_WARN(get_logger(), "No bot_ids specified, nothing will be fused.");
+            RCLCPP_WARN(get_logger(), "No bot_ids specified, nothing will be handled.");
             return;
         }
 
@@ -115,6 +134,7 @@ namespace esdf_map
             bot.cloud_topic = "/" + bot.name + "/" + bot_cloud_topic_;
             bot.world_frame = bot.name + "/world";
             bot.sensor_frame = bot.name + "/" + bot_sensor_frame_;
+            bot.forced_cloud_frame = bot_cloud_frame_.empty() ? std::string{}:(bot.name + "/" + bot_cloud_frame_);
 
             bots_.emplace(id, bot);
 
@@ -125,13 +145,22 @@ namespace esdf_map
     }
 
     void EsdfMapNode::setupSubscriptions() {
+        if (input_mode_ == "cloud") {
+            cloud_sub_ = create_subscription<PointCloud2>(
+                cloud_topic_,
+                rclcpp::SensorDataQoS(),
+                [this](PointCloud2::SharedPtr msg) { handleCloud(msg); });
+            return;
+        }
+
+        // robots mode
         for (auto &kv : bots_) {
             auto &bot = kv.second;
             bot.sub = create_subscription<PointCloud2>(
                 bot.cloud_topic,
                 rclcpp::SensorDataQoS(),
                 [this, bot_id = bot.id](PointCloud2::SharedPtr msg) {
-                    handleCloud(bot_id, msg);
+                    handleBotCloud(bot_id, msg);
                 });
         }
     }
@@ -162,22 +191,66 @@ namespace esdf_map
                       std::placeholders::_1, std::placeholders::_2));
     }
 
-    void EsdfMapNode::handleCloud(int bot_id, const PointCloud2::SharedPtr msg) {
-        auto it = bots_.find(bot_id);
-        if (it == bots_.end()) {
-            RCLCPP_WARN(get_logger(), "Received cloud for unknown bot id %d", bot_id);
-            return;
+    bool EsdfMapNode::transformCloud(const PointCloud2& in, PointCloud2& out,
+        const std::string& in_frame, const std::string& out_frame)
+    {
+         if (!tf_buffer_) return false;
+
+        if (in_frame.empty()) {
+            RCLCPP_WARN(get_logger(), "Incoming cloud has empty frame_id.");
+            return false;
         }
-        if (!core_) return;
-        Eigen::Isometry3d T_M_L; //TODO: Raycast not implemented
-        // const Bot &bot = it->second;
-        // if (!lookupLidarPose(bot.sensor_frame, msg->header.stamp, T_M_L)) {
-        //     return;
-        // }
+
+        if (in_frame == out_frame) {
+            out = in;
+            out.header.frame_id = out_frame;
+            return true;
+        }
+
+        const auto clock_type = this->get_clock()->get_clock_type();
+        rclcpp::Time stamp(in.header.stamp, clock_type);
+
+        // If stamp is zero, request "latest" transform
+        if (stamp.nanoseconds() == 0) {
+            stamp = rclcpp::Time(0, 0, clock_type);  // latest
+        }
+
+        try {
+            auto tf = tf_buffer_->lookupTransform(
+                out_frame, in_frame, stamp,
+                rclcpp::Duration::from_seconds(tf_timeout_sec_));
+
+            tf2::doTransform(in, out, tf);
+            out.header.stamp = in.header.stamp;
+            out.header.frame_id = out_frame;
+            return true;
+
+        } catch (const tf2::TransformException& ex) {
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                "TF cloud transform failed (%s -> %s): %s",
+                in_frame.c_str(), out_frame.c_str(), ex.what());
+            return false;
+        }
+    }
+
+    void EsdfMapNode::handleCloudMsg(const PointCloud2::SharedPtr& msg, const std::string& source_frame) {
+        if (!core_ || !msg) return;
+
+        const auto t_integrate_start = std::chrono::steady_clock::now();
+
+        PointCloud2 cloud_world;
+        const PointCloud2* src = msg.get();
+
+        if (source_frame != world_frame_) {
+            if (!transformCloud(*msg, cloud_world, source_frame, world_frame_)) return;
+            src = &cloud_world;
+        }
+        
 
         PointCloud cloud_M;
-        pointCloud2ToPcl(*msg, cloud_M);
-        const auto t_integrate_start = std::chrono::steady_clock::now();
+        pointCloud2ToPcl(*src, cloud_M);
+
+        Eigen::Isometry3d T_M_L = Eigen::Isometry3d::Identity(); // TODO: currently unused in w\o rayCast
         core_->integrateCloud(cloud_M, T_M_L);
         recordTiming("1. integrate_cloud", std::chrono::steady_clock::now() - t_integrate_start);
 
@@ -186,6 +259,19 @@ namespace esdf_map
             core_->updateEsdf();
             recordTiming("2. update_esdf", std::chrono::steady_clock::now() - t_update_start);
         }
+    }
+
+    void EsdfMapNode::handleCloud(const PointCloud2::SharedPtr msg) {
+        if (!msg) return;
+        std::string src_frame = cloud_frame_.empty() ? msg->header.frame_id : cloud_frame_;
+        handleCloudMsg(msg, src_frame);
+    }
+
+    void EsdfMapNode::handleBotCloud(int bot_id, const PointCloud2::SharedPtr msg) {
+        auto it = bots_.find(bot_id);
+        if (it == bots_.end()) return;
+        const std::string& src_frame = it->second.forced_cloud_frame.empty() ? msg->header.frame_id : it->second.forced_cloud_frame;
+        handleCloudMsg(msg, src_frame);
     }
 
     bool EsdfMapNode::lookupLidarPose(const std::string &lidar_frame,

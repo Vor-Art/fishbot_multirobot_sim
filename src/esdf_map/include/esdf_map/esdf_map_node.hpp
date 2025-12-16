@@ -45,6 +45,7 @@ namespace esdf_map
             std::string cloud_topic;
             std::string world_frame;  // botX/world
             std::string sensor_frame; // botX/lidar_link
+            std::string forced_cloud_frame;  // e.g. "bot1/world" or empty
             rclcpp::Subscription<PointCloud2>::SharedPtr sub;
         };
 
@@ -55,7 +56,10 @@ namespace esdf_map
 
         // Subscriptions / callbacks
         void setupSubscriptions();
-        void handleCloud(int bot_id, const PointCloud2::SharedPtr msg);
+        void handleCloud(const PointCloud2::SharedPtr msg);
+        void handleBotCloud(int bot_id, const PointCloud2::SharedPtr msg);
+        void handleCloudMsg(const PointCloud2::SharedPtr& msg, const std::string& source_frame);  // shared logic
+
         bool lookupLidarPose(const std::string &lidar_frame,
                              const rclcpp::Time &stamp,
                              Eigen::Isometry3d &T_M_L);
@@ -83,6 +87,8 @@ namespace esdf_map
         bool computeTimingStats(const std::string &name, double &curr, double &mean_ms,
                                 double &std_ms, double &max_ms,
                                 std::size_t &count);
+        bool transformCloud(const PointCloud2& in, PointCloud2& out,
+                            const std::string& in_frame, const std::string& out_frame);
 
         // Core map
         std::unique_ptr<EsdfMapCore> core_;
@@ -96,12 +102,21 @@ namespace esdf_map
         bool cloud_fields_initialized_full_ = false;
         bool cloud_fields_initialized_roi_  = false;
 
+        // Subscriptions
+        rclcpp::Subscription<PointCloud2>::SharedPtr cloud_sub_;
+
+        // Mode params
+        std::string input_mode_{"robots"};  // "robots" or "cloud"
+        std::string cloud_topic_;
+        std::string cloud_frame_;
         // Robot inputs
         std::string bot_prefix_;
         std::vector<int64_t> bot_ids_;
         std::string bot_cloud_topic_;
+        std::string bot_cloud_frame_;
         std::string bot_sensor_frame_;
-        std::string world_frame_;
+
+        std::string world_frame_{"map_origin"};
         double tf_timeout_sec_{0.1};
 
         std::map<int, Bot> bots_;

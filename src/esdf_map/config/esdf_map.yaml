@@ -2,18 +2,25 @@ esdf_map_node:
   ros__parameters:
 
     # --- Robot inputs ---
-    bot_prefix: "bot"                # "bot" -> bot1, bot2, ...
-    bot_ids: [1]               # robots that should be fused
-    bot_cloud_topic: "cloud_registered"  # /botX/<this>
-    bot_sensor_frame: "lidar_link"   # botX/<this>
+    input_mode: "cloud"         # "robots" (default) or "cloud"
+
+    # bot_prefix: "bot"                    # "bot" -> bot1, bot2, ...
+    # bot_ids: [1]                         # robots that should be handled
+    # bot_cloud_topic: "cloud_registered"  # /botX/<this>
+    # bot_cloud_frame: "world"             # botX/<this> force cloud frame, if empty use `msg.header.frame_id`
+    # bot_sensor_frame: "lidar_link"       # botX/<this>  #TODO unused in simple core
+
+    cloud_topic: "/global_downsampled_map"        # pcd topic
+    cloud_frame: "map_origin"        # force cloud frame, if empty use `msg.header.frame_id`
+
     world_frame: "map_origin"        # global ESDF frame
     tf_timeout_sec: 0.1              # TF lookup timeout [s]
 
     # --- Map geometry (global ESDF grid in world_frame) ---
     esdf_resolution: 0.15             # [m] voxel size
-    map_size_x: 20.0                 # [m]
-    map_size_y: 15.0                 # [m]
-    map_size_z: 5.0                  # [m]
+    map_size_x: 22.0                 # [m]
+    map_size_y: 17.0                 # [m]
+    map_size_z: 6.0                  # [m]
     map_origin_x: -5.0               # [m]
     map_origin_y: -7.5               # [m]
     map_origin_z: 0.0                # [m]
