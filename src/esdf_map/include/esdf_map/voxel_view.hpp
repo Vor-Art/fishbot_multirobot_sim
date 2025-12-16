@@ -37,6 +37,7 @@ namespace esdf_map {
 
             const int nx = dims.x();
             const int ny = dims.y();
+            const int stride_x = 1;
             const int stride_y = nx;
             const int stride_z = nx * ny;
 
@@ -54,7 +55,7 @@ namespace esdf_map {
                 for (int y = y0; y <= y1; ++y) {
                     const float cy = oy + (y + 0.5f) * res;
 
-                    int linear = z * stride_z + y * stride_y + x0;
+                    int linear = z * stride_z + y * stride_y + x0 * stride_x;
                     float cx = ox + (x0 + 0.5f) * res;
 
                     for (int x = x0; x <= x1; ++x, ++linear, cx += res) {

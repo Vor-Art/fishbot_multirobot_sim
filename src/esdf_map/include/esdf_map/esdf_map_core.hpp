@@ -2,6 +2,8 @@
 
 #include <memory>
 #include <vector>
+#include <mutex>
+#include <utility>
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
@@ -15,6 +17,21 @@ namespace esdf_map
 {
     class EsdfMapCore {
     public:
+        class LockedVoxelView {
+        public:
+            LockedVoxelView(LockedVoxelView&&) noexcept = default;
+            LockedVoxelView& operator=(LockedVoxelView&&) noexcept = default;
+            LockedVoxelView(const LockedVoxelView&) = delete;
+            LockedVoxelView& operator=(const LockedVoxelView&) = delete;
+            const VoxelRegionView& view() const { return view_; }
+        private:
+            friend class EsdfMapCore;
+            std::unique_lock<std::mutex> lock_;
+            VoxelRegionView view_;
+            LockedVoxelView(std::unique_lock<std::mutex>&& lk, VoxelRegionView v)
+                : lock_(std::move(lk)), view_(std::move(v)) {}
+        };
+
         struct Config {
             // Map geometry (in some global frame, e.g. map_origin).
             double resolution = 0.1;      // voxel size [m]
@@ -58,9 +75,9 @@ namespace esdf_map
         void batchQueryDistance(const Mat3xN &positions_M, Eigen::VectorXd &distances, Eigen::VectorXi &observed) const;
         void batchQueryDistanceAndGradient(const Mat3xN &positions_M, Eigen::VectorXd &distances, Mat3xN &gradients, Eigen::VectorXi &observed) const;
 
-        // Export all ESDF voxels (e.g. for /esdf/grid).
-        VoxelRegionView getVoxelView(const UpdateRegion& region) const;
-        VoxelRegionView getAllVoxels() const;
+        // Export ESDF voxels (e.g. for /esdf/grid or /esdf/grid_roi).
+        LockedVoxelView getLockedVoxelView(const UpdateRegion& region) const;
+        LockedVoxelView getAllLockedVoxels() const;
 
         // Extract a z-slice of ESDF for 2D costmap building.
         void extractSlice(double z_M, Slice2D &slice) const;

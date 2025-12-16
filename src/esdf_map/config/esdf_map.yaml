@@ -31,6 +31,7 @@ esdf_map_node:
     # --- Output / visualization ---
     publish_rate_hz: 1.0             # [Hz] publish grid & costmap
     publish_full_grid: true          # enable /esdf/grid
+    publish_roi_grid: false          # enable /esdf/grid_roi - region of interenst (part that was updated)
     publish_costmap_2d: true         # enable /esdf/costmap_2d
 
     costmap_layer_z: 0.5             # [m] slice height in world_frame

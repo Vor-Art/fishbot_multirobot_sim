@@ -37,6 +37,8 @@ namespace esdf_map
 
         esdf_grid_pub_ = create_publisher<PointCloud2>(
             "/esdf/grid", rclcpp::QoS(1).transient_local());
+        esdf_grid_roi_pub_ = create_publisher<PointCloud2>(
+            "/esdf/grid_roi", rclcpp::QoS(1).transient_local());
         costmap_pub_ = create_publisher<OccupancyGrid>(
             "/esdf/costmap_2d", rclcpp::QoS(1).transient_local());
 
@@ -74,6 +76,7 @@ namespace esdf_map
 
         publish_rate_hz_ = declare_parameter<double>("publish_rate_hz", 1.0);
         publish_full_grid_ = declare_parameter<bool>("publish_full_grid", true);
+        publish_roi_grid_ = declare_parameter<bool>("publish_roi_grid", true);
         publish_costmap_2d_ = declare_parameter<bool>("publish_costmap_2d", true);
         costmap_layer_z_ = declare_parameter<double>("costmap_layer_z", 0.5);
         costmap_free_distance_ = declare_parameter<double>("costmap_free_distance", 0.5);
@@ -220,59 +223,77 @@ namespace esdf_map
 
     void EsdfMapNode::publishTimerCb() {
         if (!core_) return;
-        if (publish_full_grid_) {
-            publishGrid();
-        }
-        if (publish_costmap_2d_) {
-            publishCostmap2D();
-        }
+
+        if (publish_full_grid_) publishGrid(true); // full region
+        if (publish_roi_grid_)  publishGrid(false);  // ROI (consumeUpdateRegion)
+        if (publish_costmap_2d_) publishCostmap2D();
         if (time_log_) logTimingReport();
     }
 
-    void EsdfMapNode::publishGrid() {
-        if (!esdf_grid_pub_) return;
+    static void initCloudFields(sensor_msgs::msg::PointCloud2& msg) {
+        sensor_msgs::PointCloud2Modifier init(msg);
+        init.setPointCloud2Fields(
+            4,
+            "x", 1, sensor_msgs::msg::PointField::FLOAT32,
+            "y", 1, sensor_msgs::msg::PointField::FLOAT32,
+            "z", 1, sensor_msgs::msg::PointField::FLOAT32,
+            "intensity", 1, sensor_msgs::msg::PointField::FLOAT32
+        );
+    }
 
-        const auto t_get_voxels = std::chrono::steady_clock::now();
-        const UpdateRegion roi = core_->consumeUpdateRegion();
-        recordTiming("get_voxels", std::chrono::steady_clock::now() - t_get_voxels);
-        if (!roi.valid) return;
+    void EsdfMapNode::publishGrid(bool full_region) {
+        auto pub = full_region ? esdf_grid_pub_ : esdf_grid_roi_pub_;
+        if (!pub) return;
 
-        const auto view = core_->getVoxelView(roi);
-        const auto N = view.count();
-        if (N == 0) return;
+        sensor_msgs::msg::PointCloud2& msg = full_region ? msg_full_ : msg_roi_;
+        bool& fields_inited = full_region ? cloud_fields_initialized_full_ : cloud_fields_initialized_roi_;
 
-        // init fields once
-        if (!cloud_fields_initialized_) {
-            sensor_msgs::PointCloud2Modifier mod(msg_);
-            mod.setPointCloud2Fields(
-                4,
-                "x", 1, sensor_msgs::msg::PointField::FLOAT32,
-                "y", 1, sensor_msgs::msg::PointField::FLOAT32,
-                "z", 1, sensor_msgs::msg::PointField::FLOAT32,
-                "intensity", 1, sensor_msgs::msg::PointField::FLOAT32
-            );
-            cloud_fields_initialized_ = true;
+        if (!fields_inited) {
+            initCloudFields(msg);
+            fields_inited = true;
         }
 
-        const auto t_publish_esdf = std::chrono::steady_clock::now();
-        sensor_msgs::PointCloud2Modifier mod(msg_);
-        mod.resize(N);
+        UpdateRegion roi;
+        if (!full_region) {
+            roi = core_->consumeUpdateRegion();
+            if (!roi.valid) return;
+        }
 
-        sensor_msgs::PointCloud2Iterator<float> it_x(msg_, "x");
-        sensor_msgs::PointCloud2Iterator<float> it_y(msg_, "y");
-        sensor_msgs::PointCloud2Iterator<float> it_z(msg_, "z");
-        sensor_msgs::PointCloud2Iterator<float> it_i(msg_, "intensity");
+        const auto t_get = std::chrono::steady_clock::now();
 
-        view.forEach([&](const esdf_map::VoxelSample& v){
-            *it_x = v.x; *it_y = v.y; *it_z = v.z; *it_i = v.distance;
-            ++it_x; ++it_y; ++it_z; ++it_i;
-        });
+        std::size_t N = 0;
+        {
+            auto locked = full_region ? core_->getAllLockedVoxels()
+                                    : core_->getLockedVoxelView(roi);
+            const auto& view = locked.view();
+            N = view.count();
+            if (N == 0) return;
 
-        msg_.header.stamp = this->get_clock()->now();
-        msg_.header.frame_id = world_frame_;
-        esdf_grid_pub_->publish(msg_);
-        recordTiming("publish_esdf", std::chrono::steady_clock::now() - t_publish_esdf);
+            recordTiming(full_region ? "get_voxels" : "get_voxels_roi", std::chrono::steady_clock::now() - t_get);
+
+            const auto t_pub = std::chrono::steady_clock::now();
+
+            sensor_msgs::PointCloud2Modifier mod(msg);
+            mod.resize(N);
+
+            sensor_msgs::PointCloud2Iterator<float> it_x(msg, "x");
+            sensor_msgs::PointCloud2Iterator<float> it_y(msg, "y");
+            sensor_msgs::PointCloud2Iterator<float> it_z(msg, "z");
+            sensor_msgs::PointCloud2Iterator<float> it_i(msg, "intensity");
+
+            view.forEach([&](const esdf_map::VoxelSample& v) {
+                *it_x = v.x; *it_y = v.y; *it_z = v.z; *it_i = v.distance;
+                ++it_x; ++it_y; ++it_z; ++it_i;
+            });
+
+            msg.header.stamp = this->get_clock()->now();
+            msg.header.frame_id = world_frame_;
+            pub->publish(msg);
+
+            recordTiming(full_region ? "publish_esdf" : "publish_esdf_roi", std::chrono::steady_clock::now() - t_pub);
+        }
     }
+
 
     void EsdfMapNode::publishCostmap2D() {
         const auto t_total_start = std::chrono::steady_clock::now();

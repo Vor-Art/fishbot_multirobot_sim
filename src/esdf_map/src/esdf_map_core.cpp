@@ -7,22 +7,27 @@
 #include <limits>
 #include <queue>
 #include <stdexcept>
+#include <mutex>
 
 namespace esdf_map {
 
     struct EsdfMapCore::Impl {
+        mutable std::mutex mtx;
+
         std::vector<float> distance_grid;
         std::vector<float> weight_grid;
         std::vector<uint8_t> observed_grid;
 
         std::queue<int> new_obstacles; // Queue to mark new obstacles since last updateEsdf()
         UpdateRegion dirty_region;    // Region that got new observations since last updateEsdf()
-        UpdateRegion pending_region;  // Region to publish since last getAllVoxels()
+        UpdateRegion pending_region;  // Region to publish since last getAllLockedVoxels()
 
         int num_voxels = 0;
     };
 
-    EsdfMapCore::EsdfMapCore(const Config &config) : config_(config) {
+    EsdfMapCore::EsdfMapCore(const Config &config) 
+        : config_(config), impl_(std::make_unique<Impl>()) 
+    {
         if (config_.resolution <= 0.0) {
             throw std::runtime_error("EsdfMapCore: resolution must be > 0.");
         }
@@ -30,18 +35,19 @@ namespace esdf_map {
             throw std::runtime_error("EsdfMapCore: dims must be > 0 in all axes.");
         }
 
-        impl_ = std::make_unique<Impl>();
         impl_->num_voxels = config_.dims.x() * config_.dims.y() * config_.dims.z();
         impl_->distance_grid.resize(impl_->num_voxels);
         impl_->weight_grid.resize(impl_->num_voxels);
         impl_->observed_grid.resize(impl_->num_voxels);
-
+        impl_->dirty_region.valid = false;
+        impl_->pending_region.valid = false;
         clear();
     }
 
     EsdfMapCore::~EsdfMapCore() = default;
 
     void EsdfMapCore::clear() {
+        std::lock_guard<std::mutex> lk(impl_->mtx);
         const float max_dist = static_cast<float>(config_.esdf_max_distance);
         std::fill(impl_->distance_grid.begin(), impl_->distance_grid.end(), max_dist);
         std::fill(impl_->weight_grid.begin(), impl_->weight_grid.end(), 0.0f);
@@ -74,6 +80,8 @@ namespace esdf_map {
         Vec3i idx = worldToIndex(p_M, config_.origin, config_.resolution);
         if (!isInsideIndex(idx, config_.dims)) return false;
         int linear = flattenIndex(idx, config_.dims);
+
+        std::lock_guard<std::mutex> lk(impl_->mtx);
         return impl_->observed_grid[linear] != 0u;
     }
 
@@ -151,6 +159,7 @@ namespace esdf_map {
 
     bool EsdfMapCore::queryDistance(const Vec3d &p_M, double &distance) const {
         if (!isInside(p_M)) return false;
+        std::lock_guard<std::mutex> lk(impl_->mtx);
         return sampleTrilinear(config_, *impl_, p_M, distance);
     }
 
@@ -159,7 +168,11 @@ namespace esdf_map {
                                                double &distance,
                                                Vec3d &gradient) const {
         if (!isInside(p_M)) return false;
-        bool ok = sampleTrilinear(config_, *impl_, p_M, distance);
+        bool ok = false;
+        {
+            std::lock_guard<std::mutex> lk(impl_->mtx);
+            ok = sampleTrilinear(config_, *impl_, p_M, distance);
+        }
         if (!ok) return false;
 
         const double eps = config_.resolution;
@@ -169,6 +182,7 @@ namespace esdf_map {
 
         auto safe_sample = [&](const Vec3d &p, double &d_out) -> bool {
             if (!isInside(p)) return false;
+            std::lock_guard<std::mutex> lk(impl_->mtx);
             return sampleTrilinear(config_, *impl_, p, d_out);
         };
 
@@ -244,7 +258,9 @@ namespace esdf_map {
         }
     }
 
-    VoxelRegionView EsdfMapCore::getVoxelView(const UpdateRegion& region) const {
+    EsdfMapCore::LockedVoxelView EsdfMapCore::getLockedVoxelView(const UpdateRegion& region) const {
+        std::unique_lock<std::mutex> lk(impl_->mtx);
+
         VoxelRegionView v;
         v.resolution = config_.resolution;
         v.origin = config_.origin;
@@ -253,15 +269,16 @@ namespace esdf_map {
         v.distance = impl_->distance_grid.data();
         v.weight   = impl_->weight_grid.data();
         v.observed = impl_->observed_grid.data();
-        return v;
+
+        return LockedVoxelView(std::move(lk), std::move(v));
     }
 
-    VoxelRegionView EsdfMapCore::getAllVoxels() const {
+    EsdfMapCore::LockedVoxelView EsdfMapCore::getAllLockedVoxels() const {
         UpdateRegion r;
         r.min_index = Vec3i(0,0,0);
         r.max_index = config_.dims - Vec3i(1,1,1);
         r.valid = true;
-        return getVoxelView(r);
+        return getLockedVoxelView(r);
     }
 
     void EsdfMapCore::extractSlice(double z_M, Slice2D &slice) const {
@@ -285,6 +302,7 @@ namespace esdf_map {
         slice.dims = Eigen::Vector2i(nx, ny);
         slice.distances.resize(static_cast<size_t>(nx * ny));
 
+        std::lock_guard<std::mutex> lk(impl_->mtx);
         for (int y = 0; y < ny; ++y) {
             for (int x = 0; x < nx; ++x) {
                 Vec3i idx(x, y, iz);
@@ -296,6 +314,7 @@ namespace esdf_map {
     }
 
     UpdateRegion EsdfMapCore::consumeUpdateRegion() {
+        std::lock_guard<std::mutex> lk(impl_->mtx);
         UpdateRegion out = impl_->pending_region;
         impl_->pending_region.valid = false;
         return out;
@@ -303,8 +322,11 @@ namespace esdf_map {
 
     void EsdfMapCore::integrateCloud(const PointCloud &cloud_M, const Eigen::Isometry3d &T_M_L) {
         (void)T_M_L; // currently unused; kept for future raycasting.
+        std::lock_guard<std::mutex> lk(impl_->mtx);
 
         for (const auto &p : cloud_M.points) {
+            if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z)) continue;
+
             const Vec3d p_M(p.x, p.y, p.z);
             Vec3i idx = worldToIndex(p_M, config_.origin, config_.resolution);
             if (!isInsideIndex(idx, config_.dims)) continue;
@@ -331,6 +353,8 @@ namespace esdf_map {
 
     // Multi-source BFS (6-neighborhood) + chamfer relax (12).
     void EsdfMapCore::updateEsdf() {
+        std::lock_guard<std::mutex> lk(impl_->mtx);
+
         if (impl_->new_obstacles.empty()) return;
         if (!impl_->dirty_region.valid) return;
 
@@ -424,12 +448,9 @@ namespace esdf_map {
                 impl_->distance_grid[idx] = current;
             };
 
-            const int x0 = roi_chamfer.min_index.x();
-            const int x1 = roi_chamfer.max_index.x();
-            const int y0 = roi_chamfer.min_index.y();
-            const int y1 = roi_chamfer.max_index.y();
-            const int z0 = roi_chamfer.min_index.z();
-            const int z1 = roi_chamfer.max_index.z();
+            const int x0 = roi_chamfer.min_index.x(), x1 = roi_chamfer.max_index.x();
+            const int y0 = roi_chamfer.min_index.y(), y1 = roi_chamfer.max_index.y();
+            const int z0 = roi_chamfer.min_index.z(), z1 = roi_chamfer.max_index.z();
 
             // Forward sweep (ROI)
             for (int z = z0; z <= z1; ++z) {

@@ -66,7 +66,7 @@ namespace esdf_map
         void publishTimerCb();
 
         // Publishers
-        void publishGrid();
+        void publishGrid(bool full_region = true);
         void publishCostmap2D();
 
         // Service
@@ -90,8 +90,11 @@ namespace esdf_map
         // TF + publisher buffer
         std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
         std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
-        sensor_msgs::msg::PointCloud2 msg_;
-        bool cloud_fields_initialized_ = false;
+
+        sensor_msgs::msg::PointCloud2 msg_full_;
+        sensor_msgs::msg::PointCloud2 msg_roi_;
+        bool cloud_fields_initialized_full_ = false;
+        bool cloud_fields_initialized_roi_  = false;
 
         // Robot inputs
         std::string bot_prefix_;
@@ -123,6 +126,7 @@ namespace esdf_map
         // Output params
         double publish_rate_hz_{1.0};
         bool publish_full_grid_{true};
+        bool publish_roi_grid_{true};
         bool publish_costmap_2d_{true};
 
         double costmap_layer_z_{0.5};
@@ -133,6 +137,7 @@ namespace esdf_map
 
         // Publishers / timers / service
         rclcpp::Publisher<PointCloud2>::SharedPtr esdf_grid_pub_;
+        rclcpp::Publisher<PointCloud2>::SharedPtr esdf_grid_roi_pub_;
         rclcpp::Publisher<OccupancyGrid>::SharedPtr costmap_pub_;
         rclcpp::TimerBase::SharedPtr esdf_update_timer_;
         rclcpp::TimerBase::SharedPtr publish_timer_;
