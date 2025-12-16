@@ -231,37 +231,46 @@ namespace esdf_map
 
     void EsdfMapNode::publishGrid() {
         if (!esdf_grid_pub_) return;
-        
+
         const auto t_get_voxels = std::chrono::steady_clock::now();
-        std::vector<Voxel> voxels;
-        core_->getAllVoxels(voxels);
+        const UpdateRegion roi = core_->consumeUpdateRegion();
         recordTiming("get_voxels", std::chrono::steady_clock::now() - t_get_voxels);
+        if (!roi.valid) return;
 
-        const auto t_publish_esdf = std::chrono::steady_clock::now();
-        pcl::PointCloud<pcl::PointXYZI> pcl_cloud;
-        pcl_cloud.reserve(voxels.size());
+        const auto view = core_->getVoxelView(roi);
+        const auto N = view.count();
+        if (N == 0) return;
 
-        for (const auto &v : voxels) {
-            // if (!v.observed) continue; // TODO: Raycast not implemented
-            pcl::PointXYZI p;
-            p.x = static_cast<float>(v.center.x());
-            p.y = static_cast<float>(v.center.y());
-            p.z = static_cast<float>(v.center.z());
-            p.intensity = v.distance;
-            pcl_cloud.push_back(p);
+        // init fields once
+        if (!cloud_fields_initialized_) {
+            sensor_msgs::PointCloud2Modifier mod(msg_);
+            mod.setPointCloud2Fields(
+                4,
+                "x", 1, sensor_msgs::msg::PointField::FLOAT32,
+                "y", 1, sensor_msgs::msg::PointField::FLOAT32,
+                "z", 1, sensor_msgs::msg::PointField::FLOAT32,
+                "intensity", 1, sensor_msgs::msg::PointField::FLOAT32
+            );
+            cloud_fields_initialized_ = true;
         }
 
-        if (pcl_cloud.empty()) return;
+        const auto t_publish_esdf = std::chrono::steady_clock::now();
+        sensor_msgs::PointCloud2Modifier mod(msg_);
+        mod.resize(N);
 
-        pcl_cloud.width = pcl_cloud.size();
-        pcl_cloud.height = 1;
-        pcl_cloud.is_dense = false;
+        sensor_msgs::PointCloud2Iterator<float> it_x(msg_, "x");
+        sensor_msgs::PointCloud2Iterator<float> it_y(msg_, "y");
+        sensor_msgs::PointCloud2Iterator<float> it_z(msg_, "z");
+        sensor_msgs::PointCloud2Iterator<float> it_i(msg_, "intensity");
 
-        PointCloud2 msg;
-        pcl::toROSMsg(pcl_cloud, msg);
-        msg.header.stamp = this->get_clock()->now();
-        msg.header.frame_id = world_frame_;
-        esdf_grid_pub_->publish(msg);
+        view.forEach([&](const esdf_map::VoxelSample& v){
+            *it_x = v.x; *it_y = v.y; *it_z = v.z; *it_i = v.distance;
+            ++it_x; ++it_y; ++it_z; ++it_i;
+        });
+
+        msg_.header.stamp = this->get_clock()->now();
+        msg_.header.frame_id = world_frame_;
+        esdf_grid_pub_->publish(msg_);
         recordTiming("publish_esdf", std::chrono::steady_clock::now() - t_publish_esdf);
     }
 

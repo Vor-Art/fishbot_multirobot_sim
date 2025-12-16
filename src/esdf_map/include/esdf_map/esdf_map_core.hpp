@@ -8,51 +8,11 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
+#include "esdf_map/esdf_map_primitives.hpp"
+#include "esdf_map/voxel_view.hpp"
+
 namespace esdf_map
 {
-    using Vec3d = Eigen::Vector3d;
-    using Vec3i = Eigen::Vector3i;
-    using Mat3xN = Eigen::Matrix<double, 3, Eigen::Dynamic>;
-    using Point = pcl::PointXYZ;
-    using PointCloud = pcl::PointCloud<Point>;
-
-    struct MapInfo {
-        double resolution;
-        Vec3d origin;
-        Vec3i dims;
-    };
-
-    struct Voxel {
-        Vec3d center;
-        float distance = 0.f;
-        float weight = 0.f;
-        bool observed = false;
-    };
-
-    struct Slice2D {
-        double resolution = 0.0;
-        Eigen::Vector2d origin = Eigen::Vector2d::Zero(); // min corner
-        Eigen::Vector2i dims = Eigen::Vector2i::Zero();   // nx, ny
-        std::vector<float> distances;                     // row-major [y * nx + x]
-    };
-
-    struct UpdateRegion {
-        Vec3i min_index = Vec3i::Zero(); // inclusive
-        Vec3i max_index = Vec3i::Zero(); // inclusive
-        bool valid = false;
-
-        inline void clamp(const Vec3i& min_c, const Vec3i& max_c) {
-            min_index = min_index.cwiseMax(min_c);
-            max_index = max_index.cwiseMin(max_c);
-        }
-
-        inline void expand(int margin_vox) {
-            if (!valid) return;
-            min_index.array() -= margin_vox;
-            max_index.array() += margin_vox;
-        }
-    };
-
     class EsdfMapCore {
     public:
         struct Config {
@@ -99,7 +59,9 @@ namespace esdf_map
         void batchQueryDistanceAndGradient(const Mat3xN &positions_M, Eigen::VectorXd &distances, Mat3xN &gradients, Eigen::VectorXi &observed) const;
 
         // Export all ESDF voxels (e.g. for /esdf/grid).
-        void getAllVoxels(std::vector<Voxel> &voxels) const;
+        VoxelRegionView getVoxelView(const UpdateRegion& region) const;
+        VoxelRegionView getAllVoxels() const;
+
         // Extract a z-slice of ESDF for 2D costmap building.
         void extractSlice(double z_M, Slice2D &slice) const;
 

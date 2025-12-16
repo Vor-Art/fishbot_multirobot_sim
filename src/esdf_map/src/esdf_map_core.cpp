@@ -244,24 +244,24 @@ namespace esdf_map {
         }
     }
 
-    void EsdfMapCore::getAllVoxels(std::vector<Voxel> &voxels) const {
-        voxels.clear();
-        voxels.resize(static_cast<size_t>(impl_->num_voxels));
+    VoxelRegionView EsdfMapCore::getVoxelView(const UpdateRegion& region) const {
+        VoxelRegionView v;
+        v.resolution = config_.resolution;
+        v.origin = config_.origin;
+        v.dims = config_.dims;
+        v.region = region;
+        v.distance = impl_->distance_grid.data();
+        v.weight   = impl_->weight_grid.data();
+        v.observed = impl_->observed_grid.data();
+        return v;
+    }
 
-        int linear = 0;
-        for (int z = 0; z < config_.dims.z(); ++z) {
-            for (int y = 0; y < config_.dims.y(); ++y) {
-                for (int x = 0; x < config_.dims.x(); ++x, ++linear) {
-                    Vec3i idx(x, y, z);
-                    Voxel &v = voxels[linear];
-                    v.center   = indexToCenter(idx, config_.origin, config_.resolution);
-                    v.distance = impl_->distance_grid[linear];
-                    v.weight   = impl_->weight_grid[linear];
-                    v.observed = impl_->observed_grid[linear] != 0u;
-                }
-            }
-        }
-        impl_->pending_region.valid = false;
+    VoxelRegionView EsdfMapCore::getAllVoxels() const {
+        UpdateRegion r;
+        r.min_index = Vec3i(0,0,0);
+        r.max_index = config_.dims - Vec3i(1,1,1);
+        r.valid = true;
+        return getVoxelView(r);
     }
 
     void EsdfMapCore::extractSlice(double z_M, Slice2D &slice) const {

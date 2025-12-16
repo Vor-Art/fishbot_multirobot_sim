@@ -16,11 +16,15 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
+#include <sensor_msgs/point_cloud2_iterator.hpp>
+#include <sensor_msgs/msg/point_field.hpp>
+
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
-#include "esdf_map/esdf_map_core.hpp"
 #include "esdf_map/srv/query_esdf.hpp"
+#include "esdf_map/esdf_map_core.hpp"
+#include "esdf_map/voxel_view.hpp"
 #include "esdf_map/utils.hpp"
 
 namespace esdf_map
@@ -83,9 +87,11 @@ namespace esdf_map
         // Core map
         std::unique_ptr<EsdfMapCore> core_;
 
-        // TF
+        // TF + publisher buffer
         std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
         std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+        sensor_msgs::msg::PointCloud2 msg_;
+        bool cloud_fields_initialized_ = false;
 
         // Robot inputs
         std::string bot_prefix_;
