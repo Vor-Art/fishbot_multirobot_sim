@@ -28,7 +28,7 @@ Multi-robot simulation stack for testing lidar-inertial SLAM, map fusion, and na
 
 - Control input: `/bot*/cmd_vel` (geometry_msgs/Twist) per robot namespace.
 - Shared map: `/global_downsampled_map` (sensor_msgs/PointCloud2) fused from all agents.
-- Global poses: `/bot*/global_pose` (geometry_msgs/PoseStamped) relative to `map_origin` for localization.
+- Global odometry: `/bot*/global_odom` (nav_msgs/Odometry) relative to `map_origin` for localization.
 - ESDF: generation/publishing is not finished yet.  <!-- <fill in when ESDF is available> -->
 
 ## Repository structure

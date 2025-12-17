@@ -28,11 +28,11 @@ def _launch_setup(context, *args, **kwargs):
         }],
     )
 
-    # 2) Pose publisher
-    global_pose_node = Node(
+    # 2) Odom publisher
+    global_odom_node = Node(
         package="map_fusion",
-        executable="global_pose_publisher.py",
-        name="global_pose_publisher",
+        executable="global_odom_publisher.py",
+        name="global_odom_publisher",
         output="screen",
         parameters=[{
             "use_sim_time": use_sim_time,
@@ -40,11 +40,12 @@ def _launch_setup(context, *args, **kwargs):
             "bot_prefix": "bot",            # matches bot1/..., bot2/...
             "bot_frame": "base_link",       # <bot_prefix><i>/<bot_frame>
             "publish_rate_hz": 10.0,
-            "pose_topic_suffix": "global_pose",
+            "odom_topic_suffix": "global_odom",
+            "source_odom_topic": "lidar_slam/odom",
         }],
     )
 
-    return [map_fusion_node, global_pose_node]
+    return [map_fusion_node, global_odom_node]
 
 
 def generate_launch_description():
