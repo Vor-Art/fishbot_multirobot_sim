@@ -8,7 +8,8 @@ Multi-robot simulation stack for testing lidar-inertial SLAM, map fusion, and na
 
 - Gazebo-based simulator (`src/gazebo_sim`) with parametrised robot blueprints and spawn helpers.
 - Swarm-LIO2 ROS 2 port (`src/Swarm-LIO2-ROS2-Docker`) for multi-agent lidar-inertial odometry.
-- Map fusion (`src/map_fusion`) that merges per-robot point clouds into `/global_downsampled_map`, creates ESDF, and republishes global poses.
+- Map fusion (`src/map_fusion`) that merges per-robot point clouds into `/global_downsampled_map` and republishes global poses.
+- ESDF map (`src/esdf_map`) that builds a 3D ESDF from either fused or per-robot clouds and exposes grid topics plus a distance/gradient query service.
 - Foxglove wrapper (`src/foxglove_app`) for multi-agent visualization layouts.
 - Navigation controller (`src/navigation`). Not integrated yet.
 - Exploration module: ***TODO***
@@ -20,6 +21,7 @@ Multi-robot simulation stack for testing lidar-inertial SLAM, map fusion, and na
 - **Gazebo** spawns `botN` robots (default `bot1..bot4`) with URDFs built from YAML configs. Each robot publishes odom/IMU/lidar topics into ROS 2 and TF frames for every robot.
 - **Swarm-LIO2** reads lidar/IMU per robot for ego and other agents state estimation (see [`src/Swarm-LIO2-ROS2-Docker/README.md`](src/Swarm-LIO2-ROS2-Docker/README.md)). After SLAM initializes it publishes extrinsic transforms between agents.
 - **Map fusion** listens to `map_origin -> botN/world` TF, accumulates, and publishes a merged global map plus each agent pose relative to `map_origin`.
+- **ESDF map** consumes either the fused map (`/global_downsampled_map`) or per-robot `/botX/cloud_registered` and publishes `/esdf/grid`, `/esdf/grid_roi`, `/esdf/costmap_2d`, plus the `/esdf/query` distance/gradient service for planners.
 - **Foxglove** provides ready layouts for multi-agent visualization.
 - **Navigation** *TODO*.
 - **Exploration** *TODO*.
@@ -29,7 +31,7 @@ Multi-robot simulation stack for testing lidar-inertial SLAM, map fusion, and na
 - Control input: `/bot*/cmd_vel` (geometry_msgs/Twist) per robot namespace.
 - Shared map: `/global_downsampled_map` (sensor_msgs/PointCloud2) fused from all agents.
 - Global poses: `/bot*/global_pose` (geometry_msgs/PoseStamped) relative to `map_origin` for localization.
-- ESDF: generation/publishing is not finished yet.  <!-- <fill in when ESDF is available> -->
+- ESDF map: `/esdf/grid` (full) + `/esdf/grid_roi` (updated region) in `map_origin`, 2D slice `/esdf/costmap_2d`, and query service `/esdf/query`.
 
 ## Repository structure
 
@@ -39,6 +41,7 @@ Multi-robot simulation stack for testing lidar-inertial SLAM, map fusion, and na
   - `gazebo_sim/` – Gazebo worlds, robot blueprints, and spawn launch files.
   - `Swarm-LIO2-ROS2-Docker/` – upstream SLAM port (includes its own compose file).
   - `map_fusion/` – map fusion nodes.
+  - `esdf_map/` – ESDF builder node, launch, and config.
   - `navigation/` – navigation package.
   - `foxglove_app/` – Foxglove bridge wrapper, layouts, and optional extension.
 
@@ -82,15 +85,16 @@ git checkout ros2_testing_2d_extrinsics
    xhost +local:root
    ```
 
-3. Launch the full stack (Gazebo + SLAM + fusion + Foxglove):
+3. Launch the full stack (Gazebo + SLAM + fusion + ESDF + Foxglove):
 
    ```bash
-   docker compose up gazebo swarm_lio2 map_fusion foxglove
+   docker compose up gazebo swarm_lio2 map_fusion esdf_map foxglove
    ```
 
    - Gazebo: spawns `FISHBOT_AGENT_COUNT` robots on a circle (defaults to 4, names `bot1..botN`).
    - Swarm-LIO2: runs its simulation launch file with `bot_count:=FISHBOT_AGENT_COUNT`.
    - Map fusion: outputs `/global_downsampled_map` and `/bot*/global_pose`.
+   - ESDF map: consumes fused or per-robot clouds (configurable) and publishes `/esdf/grid`, `/esdf/grid_roi`, `/esdf/costmap_2d`, and `/esdf/query`.
    - Foxglove: launches server on `ws://localhost:8765`.
 
 4. Inspect topics if you want (inside any container):
