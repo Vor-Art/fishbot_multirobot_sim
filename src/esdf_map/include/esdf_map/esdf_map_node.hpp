@@ -99,8 +99,6 @@ namespace esdf_map
 
         sensor_msgs::msg::PointCloud2 msg_full_;
         sensor_msgs::msg::PointCloud2 msg_roi_;
-        bool cloud_fields_initialized_full_ = false;
-        bool cloud_fields_initialized_roi_  = false;
 
         // Subscriptions
         rclcpp::Subscription<PointCloud2>::SharedPtr cloud_sub_;
@@ -149,6 +147,9 @@ namespace esdf_map
         double costmap_lethal_distance_{0.1};
         bool time_log_{false};
         std::chrono::steady_clock::duration timing_window_{std::chrono::seconds(25)};
+        bool debug_profile_{false};
+        int debug_profile_every_{20};
+        std::uint64_t debug_profile_counter_{0};
 
         // Publishers / timers / service
         rclcpp::Publisher<PointCloud2>::SharedPtr esdf_grid_pub_;
@@ -156,6 +157,7 @@ namespace esdf_map
         rclcpp::Publisher<OccupancyGrid>::SharedPtr costmap_pub_;
         rclcpp::TimerBase::SharedPtr esdf_update_timer_;
         rclcpp::TimerBase::SharedPtr publish_timer_;
+        rclcpp::TimerBase::SharedPtr heartbeat_timer_;
         rclcpp::Service<EsdfQuery>::SharedPtr query_srv_;
 
         using TimingBuffer = std::deque<std::pair<std::chrono::steady_clock::time_point, double>>;

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, Tuple
+import time
 
 import numpy as np
 import rclpy
@@ -45,6 +46,8 @@ class MapFusionNode(Node):
         self.declare_parameter('combined_map_topic', '/global_downsampled_map')
         self.declare_parameter('origin_frame', 'map_origin')
         self.declare_parameter('voxel_leaf_size', 0.1)
+        self.declare_parameter('debug_profile', True)
+        self.declare_parameter('debug_profile_every', 10)
 
         self.bot_prefix: str = str(self.get_parameter('bot_prefix').value)
         self.bot_cloud_topic: str = str(self.get_parameter('bot_cloud_topic').value).lstrip('/')
@@ -53,6 +56,9 @@ class MapFusionNode(Node):
         self.combined_map_topic: str = str(self.get_parameter('combined_map_topic').value)
         rate_hz: float = float(self.get_parameter('publish_rate_hz').value)
         self.voxel_size: float = float(self.get_parameter('voxel_leaf_size').value)
+        self.debug_profile: bool = bool(self.get_parameter('debug_profile').value)
+        self.debug_profile_every: int = int(self.get_parameter('debug_profile_every').value)
+        self._profile_count: int = 0
 
         self.bot_resolver = BotFrameResolver(self.bot_prefix)
         self.bots_dict: Dict[int, BotSub] = {}
@@ -89,6 +95,8 @@ class MapFusionNode(Node):
 
         self.global_pub = self.create_publisher(PointCloud2, self.combined_map_topic, qos_default)
         self.create_timer(1.0 / max(rate_hz, 0.1), self._publish_global_map)
+        if self.debug_profile:
+            self.create_timer(2.0, self._heartbeat)
 
         self._pc_fields = [
             PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
@@ -120,6 +128,7 @@ class MapFusionNode(Node):
             self._register_bot(self.bot_resolver.bot_id_from_frame(t.child_frame_id))
 
     def _map_callback(self, uid: int, msg: PointCloud2) -> None:
+        t0 = time.perf_counter()
         pts = voxelize_numpy(pcd_to_xyz_fast(msg), self.voxel_size)
         if pts.size == 0:
             return
@@ -130,6 +139,14 @@ class MapFusionNode(Node):
 
         combined = pts if existing.size == 0 else np.concatenate((existing, pts), axis=0)
         self.local_maps[uid] = voxelize_numpy(combined, self.voxel_size)
+
+        if self.debug_profile:
+            self._profile_count += 1
+            if self.debug_profile_every > 0 and (self._profile_count % self.debug_profile_every == 0):
+                dt_ms = (time.perf_counter() - t0) * 1000.0
+                self.get_logger().info(
+                    f"[profile] map_cb bot={uid} pts_in={pts.shape[0]} stored={self.local_maps[uid].shape[0]} dt={dt_ms:.2f}ms"
+                )
 
     def _lookup_extrinsic(self, uid: int) -> Tuple[np.ndarray, np.ndarray] | None:
         if uid not in self.bots_dict:
@@ -184,6 +201,7 @@ class MapFusionNode(Node):
         return merged_pts
 
     def _publish_global_map(self) -> None:
+        t0 = time.perf_counter()
         merged_pts = self.build_global_map()
         if merged_pts is None or merged_pts.size == 0:
             return
@@ -193,6 +211,17 @@ class MapFusionNode(Node):
         header.frame_id = self.origin_frame_id
         cloud = pc2.create_cloud(header, self._pc_fields, merged_pts.tolist())
         self.global_pub.publish(cloud)
+
+        if self.debug_profile:
+            dt_ms = (time.perf_counter() - t0) * 1000.0
+            self.get_logger().info(
+                f"[profile] publish pts={merged_pts.shape[0]} dt={dt_ms:.2f}ms bots={len(self.bots_dict)}"
+            )
+
+    def _heartbeat(self) -> None:
+        self.get_logger().info(
+            f"[profile] bots={len(self.bots_dict)} caches={[f'{k}:{v.shape[0]}' for k,v in self.local_maps.items()]}"
+        )
 
 
 def main(args=None) -> None:

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <exception>
 #include <iomanip>
 #include <numeric>
 #include <sstream>
@@ -101,6 +102,8 @@ namespace esdf_map
         costmap_free_distance_ = declare_parameter<double>("costmap_free_distance", 0.5);
         costmap_lethal_distance_ = declare_parameter<double>("costmap_lethal_distance", 0.1);
         time_log_ = declare_parameter<bool>("time_log", false);
+        debug_profile_ = declare_parameter<bool>("debug_profile", false);
+        debug_profile_every_ = declare_parameter<int>("debug_profile_every", 20);
     }
 
     EsdfMapCore::Config EsdfMapNode::makeCoreConfig() const {
@@ -183,6 +186,19 @@ namespace esdf_map
                 node_base, timer_iface, clock, period,
                 std::bind(&EsdfMapNode::publishTimerCb, this));
         }
+
+        if (debug_profile_ && !heartbeat_timer_) {
+            auto period = rclcpp::Duration::from_seconds(2.0);
+            heartbeat_timer_ = rclcpp::create_timer(
+                node_base, timer_iface, clock, period,
+                [this]() {
+                    RCLCPP_INFO(get_logger(),
+                        "[profile] mode=%s core=%s publish_full=%d roi=%d cost2d=%d",
+                        input_mode_.c_str(),
+                        core_ ? "ok" : "null",
+                        publish_full_grid_, publish_roi_grid_, publish_costmap_2d_);
+                });
+        }
     }
 
     void EsdfMapNode::setupService() {
@@ -252,13 +268,42 @@ namespace esdf_map
 
         Eigen::Isometry3d T_M_L = Eigen::Isometry3d::Identity(); // TODO: currently unused in w\o rayCast
         core_->integrateCloud(cloud_M, T_M_L);
-        recordTiming("1. integrate_cloud", std::chrono::steady_clock::now() - t_integrate_start);
+        const auto dt_integrate = std::chrono::steady_clock::now() - t_integrate_start;
+        recordTiming("1. integrate_cloud", dt_integrate);
 
         if (integrate_every_cloud_) {
             const auto t_update_start = std::chrono::steady_clock::now();
             core_->updateEsdf();
-            recordTiming("2. update_esdf", std::chrono::steady_clock::now() - t_update_start);
+            const auto dt_update = std::chrono::steady_clock::now() - t_update_start;
+            recordTiming("2. update_esdf", dt_update);
+
+            if (debug_profile_) {
+                auto count = ++debug_profile_counter_;
+                if (debug_profile_every_ > 0 && (count % static_cast<std::uint64_t>(debug_profile_every_) == 0)) {
+                    const double ms_int = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(dt_integrate).count();
+                    const double ms_upd = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(dt_update).count();
+                    RCLCPP_INFO(get_logger(),
+                        "[profile] cloud %zu pts=%zu tf_src=%s->%s integrate=%.2fms update=%.2fms",
+                        static_cast<size_t>(count),
+                        cloud_M.size(),
+                        source_frame.c_str(), world_frame_.c_str(),
+                        ms_int, ms_upd);
+                }
+            }
+
+        } else if (debug_profile_) {
+            auto count = ++debug_profile_counter_;
+            if (debug_profile_every_ > 0 && (count % static_cast<std::uint64_t>(debug_profile_every_) == 0)) {
+                const double ms_int = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(dt_integrate).count();
+                RCLCPP_INFO(get_logger(),
+                    "[profile] cloud %zu pts=%zu tf_src=%s->%s integrate=%.2fms (ESDF deferred)",
+                    static_cast<size_t>(count),
+                    cloud_M.size(),
+                    source_frame.c_str(), world_frame_.c_str(),
+                    ms_int);
+            }
         }
+    
     }
 
     void EsdfMapNode::handleCloud(const PointCloud2::SharedPtr msg) {
@@ -304,7 +349,13 @@ namespace esdf_map
         if (!core_) return;
         const auto t_start = std::chrono::steady_clock::now();
         core_->updateEsdf();
-        recordTiming("2. update_esdf", std::chrono::steady_clock::now() - t_start);
+        const auto dt = std::chrono::steady_clock::now() - t_start;
+        recordTiming("2. update_esdf", dt);
+
+        if (debug_profile_) {
+            const double ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(dt).count();
+            RCLCPP_INFO(get_logger(), "[profile] timer update_esdf=%.2fms", ms);
+        }
     }
 
     void EsdfMapNode::publishTimerCb() {
@@ -314,6 +365,10 @@ namespace esdf_map
         if (publish_roi_grid_)  publishGrid(false);  // ROI (consumeUpdateRegion)
         if (publish_costmap_2d_) publishCostmap2D();
         if (time_log_) logTimingReport();
+        if (debug_profile_) {
+            RCLCPP_INFO(get_logger(), "[profile] publish tick full=%d roi=%d cost2d=%d",
+                        publish_full_grid_, publish_roi_grid_, publish_costmap_2d_);
+        }
     }
 
     static void initCloudFields(sensor_msgs::msg::PointCloud2& msg) {
@@ -331,14 +386,11 @@ namespace esdf_map
         auto pub = full_region ? esdf_grid_pub_ : esdf_grid_roi_pub_;
         if (!pub) return;
 
+        // Use the persistent message storage but re-init the fields each time to
+        // guarantee the layout/point_step stays consistent even if previous calls
+        // exited early.
         sensor_msgs::msg::PointCloud2& msg = full_region ? msg_full_ : msg_roi_;
-        bool& fields_inited = full_region ? cloud_fields_initialized_full_ : cloud_fields_initialized_roi_;
-
-        if (!fields_inited) {
-            initCloudFields(msg);
-            fields_inited = true;
-        }
-
+        initCloudFields(msg);
         UpdateRegion roi;
         if (!full_region) {
             roi = core_->consumeUpdateRegion();
@@ -359,18 +411,36 @@ namespace esdf_map
 
             const auto t_pub = std::chrono::steady_clock::now();
 
-            sensor_msgs::PointCloud2Modifier mod(msg);
-            mod.resize(N);
+            // Explicitly size the message to avoid iterator overruns.
+            const uint32_t point_step = static_cast<uint32_t>(4 * sizeof(float));
+            msg.point_step = point_step;
+            msg.height = 1;
+            msg.width = static_cast<uint32_t>(N);
+            msg.row_step = point_step * msg.width;
+            msg.is_dense = false;
+            msg.data.assign(static_cast<size_t>(msg.row_step) * msg.height, 0u);
 
-            sensor_msgs::PointCloud2Iterator<float> it_x(msg, "x");
-            sensor_msgs::PointCloud2Iterator<float> it_y(msg, "y");
-            sensor_msgs::PointCloud2Iterator<float> it_z(msg, "z");
-            sensor_msgs::PointCloud2Iterator<float> it_i(msg, "intensity");
+            float *data_ptr = reinterpret_cast<float *>(msg.data.data());
+            const size_t max_floats = static_cast<size_t>(msg.width) * 4u;
+            size_t idx = 0;
+            bool overflowed = false;
 
             view.forEach([&](const esdf_map::VoxelSample& v) {
-                *it_x = v.x; *it_y = v.y; *it_z = v.z; *it_i = v.distance;
-                ++it_x; ++it_y; ++it_z; ++it_i;
+                if (idx + 4 > max_floats) {
+                    overflowed = true;
+                    return;
+                }
+                data_ptr[idx++] = v.x;
+                data_ptr[idx++] = v.y;
+                data_ptr[idx++] = v.z;
+                data_ptr[idx++] = v.distance;
             });
+
+            if (overflowed || idx != max_floats) {
+                RCLCPP_WARN(get_logger(),
+                    "publishGrid truncated/overflow: full=%d count=%zu filled=%zu",
+                    full_region ? 1 : 0, static_cast<size_t>(N), idx / 4);
+            }
 
             msg.header.stamp = this->get_clock()->now();
             msg.header.frame_id = world_frame_;

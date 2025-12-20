@@ -4,11 +4,11 @@ esdf_map_node:
     # --- Robot inputs ---
     input_mode: "cloud"         # "robots" (default) or "cloud"
 
-    # bot_prefix: "bot"                    # "bot" -> bot1, bot2, ...
-    # bot_ids: [1]                         # robots that should be handled
-    # bot_cloud_topic: "cloud_registered"  # /botX/<this>
-    # bot_cloud_frame: "world"             # botX/<this> force cloud frame, if empty use `msg.header.frame_id`
-    # bot_sensor_frame: "lidar_link"       # botX/<this>  #TODO unused in simple core
+    bot_prefix: "bot"                    # "bot" -> bot1, bot2, ...
+    bot_ids: [1,2,3,4]                         # robots that should be handled
+    bot_cloud_topic: "cloud_registered"  # /botX/<this>
+    bot_cloud_frame: "world"             # botX/<this> force cloud frame, if empty use `msg.header.frame_id`
+    bot_sensor_frame: "lidar_link"       # botX/<this>  #TODO unused in simple core
 
     cloud_topic: "/global_downsampled_map"        # pcd topic
     cloud_frame: "map_origin"        # force cloud frame, if empty use `msg.header.frame_id`
@@ -45,3 +45,4 @@ esdf_map_node:
     costmap_free_distance: 2.5       # [m] dist >= free -> cost=0
     costmap_lethal_distance: 0.25    # [m] dist <= lethal -> cost=100
     time_log: true                   # enable timing stats (avg/std over last 10s)
+    debug_profile: false

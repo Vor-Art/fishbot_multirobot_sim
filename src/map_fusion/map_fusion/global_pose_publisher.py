@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, Optional
+import time
 
 import rclpy
 from rclpy.duration import Duration
@@ -43,12 +44,17 @@ class MultiBotGlobalPose(Node):
         self.declare_parameter("bot_frame", "base_link")
         self.declare_parameter("publish_rate_hz", 10.0)
         self.declare_parameter("pose_topic_suffix", "global_pose")
+        self.declare_parameter("debug_profile", True)
+        self.declare_parameter("debug_profile_every", 20)
 
         self.global_frame: str = str(self.get_parameter("global_frame").value).lstrip("/")
         self.bot_prefix: str = str(self.get_parameter("bot_prefix").value)
         self.bot_frame: str = str(self.get_parameter("bot_frame").value)
         self.pose_topic_suffix: str = str(self.get_parameter("pose_topic_suffix").value)
         rate_hz: float = float(self.get_parameter("publish_rate_hz").value)
+        self.debug_profile: bool = bool(self.get_parameter("debug_profile").value)
+        self.debug_profile_every: int = int(self.get_parameter("debug_profile_every").value)
+        self._profile_count: int = 0
 
         self._bot_resolver = BotFrameResolver(self.bot_prefix)
         self._bots: Dict[int, BotPub] = {}
@@ -73,6 +79,8 @@ class MultiBotGlobalPose(Node):
         self.create_subscription(TFMessage, "/tf_static", self._on_tf_msg, qos_tf_static)
 
         self._timer = self.create_timer(1.0 / max(rate_hz, 0.1), self._tick)
+        if self.debug_profile:
+            self.create_timer(2.0, self._heartbeat)
 
         self.get_logger().info(
             f"Publishing global poses in '{self.global_frame}' for discovered frames like "
@@ -97,6 +105,7 @@ class MultiBotGlobalPose(Node):
             self._register_bot(self._bot_resolver.bot_id_from_frame(t.child_frame_id))
 
     def _tick(self) -> None:
+        t0 = time.perf_counter()
         now = rclpy.time.Time()  # latest
         timeout = Duration(seconds=0.05)
 
@@ -120,6 +129,19 @@ class MultiBotGlobalPose(Node):
             out.pose.orientation = tf.transform.rotation
 
             bot.pub.publish(out)
+
+        if self.debug_profile:
+            self._profile_count += 1
+            if self.debug_profile_every > 0 and (self._profile_count % self.debug_profile_every == 0):
+                dt_ms = (time.perf_counter() - t0) * 1000.0
+                self.get_logger().info(
+                    f"[profile] pose tick bots={len(self._bots)} dt={dt_ms:.2f}ms"
+                )
+
+    def _heartbeat(self) -> None:
+        self.get_logger().info(
+            f"[profile] pose heartbeat bots={list(self._bots.keys())}"
+        )
 
 
 def main() -> None:
