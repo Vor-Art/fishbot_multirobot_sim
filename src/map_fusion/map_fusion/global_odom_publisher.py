@@ -15,7 +15,7 @@ from rclpy.qos import (
     DurabilityPolicy,
 )
 
-from geometry_msgs.msg import PoseStamped
+from nav_msgs.msg import Odometry
 from tf2_msgs.msg import TFMessage
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
@@ -29,11 +29,12 @@ class BotPub:
     bot_id: int
     base_frame: str
     pub: any
+    sub: any
 
 
 class MultiBotGlobalPose(Node):
     def __init__(self) -> None:
-        super().__init__("global_pose_publisher")
+        super().__init__("global_odom_publisher")
 
         try:
             self.declare_parameter('use_sim_time', True)
@@ -43,14 +44,16 @@ class MultiBotGlobalPose(Node):
         self.declare_parameter("bot_prefix", "bot")
         self.declare_parameter("bot_frame", "base_link")
         self.declare_parameter("publish_rate_hz", 10.0)
-        self.declare_parameter("pose_topic_suffix", "global_pose")
+        self.declare_parameter("odom_topic_suffix", "global_odom")
+        self.declare_parameter("source_odom_topic", "lidar_slam/odom")
         self.declare_parameter("debug_profile", True)
         self.declare_parameter("debug_profile_every", 20)
 
         self.global_frame: str = str(self.get_parameter("global_frame").value).lstrip("/")
         self.bot_prefix: str = str(self.get_parameter("bot_prefix").value)
         self.bot_frame: str = str(self.get_parameter("bot_frame").value)
-        self.pose_topic_suffix: str = str(self.get_parameter("pose_topic_suffix").value)
+        self.odom_topic_suffix: str = str(self.get_parameter("odom_topic_suffix").value)
+        self.source_odom_topic: str = str(self.get_parameter("source_odom_topic").value).lstrip("/")
         rate_hz: float = float(self.get_parameter("publish_rate_hz").value)
         self.debug_profile: bool = bool(self.get_parameter("debug_profile").value)
         self.debug_profile_every: int = int(self.get_parameter("debug_profile_every").value)
@@ -58,6 +61,7 @@ class MultiBotGlobalPose(Node):
 
         self._bot_resolver = BotFrameResolver(self.bot_prefix)
         self._bots: Dict[int, BotPub] = {}
+        self._last_odom: Dict[int, Odometry] = {}
 
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
@@ -83,21 +87,32 @@ class MultiBotGlobalPose(Node):
             self.create_timer(2.0, self._heartbeat)
 
         self.get_logger().info(
-            f"Publishing global poses in '{self.global_frame}' for discovered frames like "
-            f"'{self.bot_prefix}<id>/{self.bot_frame}'."
+            f"Publishing global odometry in '{self.global_frame}' for discovered frames like "
+            f"'{self.bot_prefix}<id>/{self.bot_frame}', using twist from '{self.bot_prefix}<id>/{self.source_odom_topic}'."
         )
+
+    def _on_bot_odom(self, bot_id: int, msg: Odometry) -> None:
+        self._last_odom[bot_id] = msg
 
     def _register_bot(self, bot_id: Optional[int]) -> None:
         if bot_id is None or bot_id in self._bots:
             return
 
         base_frame = f"{self.bot_prefix}{bot_id}/{self.bot_frame}"
-        topic = f"{self.bot_prefix}{bot_id}/{self.pose_topic_suffix}"
+        topic = f"{self.bot_prefix}{bot_id}/{self.odom_topic_suffix}"
+        src_topic = f"{self.bot_prefix}{bot_id}/{self.source_odom_topic}"
 
-        pub = self.create_publisher(PoseStamped, topic, 10)
-        self._bots[bot_id] = BotPub(bot_id=bot_id, base_frame=base_frame, pub=pub)
+        pub = self.create_publisher(Odometry, topic, 10)
+        sub = self.create_subscription(
+            Odometry,
+            src_topic,
+            lambda m, bid=bot_id: self._on_bot_odom(bid, m),
+            10,
+        )
 
-        self.get_logger().info(f"Discovered {self.bot_prefix}{bot_id}: publishing on '{topic}'")
+        self._bots[bot_id] = BotPub(bot_id=bot_id, base_frame=base_frame, pub=pub, sub=sub)
+
+        self.get_logger().info(f"Discovered {self.bot_prefix}{bot_id}: publishing on '{topic}', listening '{src_topic}'")
 
     def _on_tf_msg(self, msg: TFMessage) -> None:
         for t in msg.transforms:
@@ -107,7 +122,7 @@ class MultiBotGlobalPose(Node):
     def _tick(self) -> None:
         t0 = time.perf_counter()
         now = rclpy.time.Time()  # latest
-        timeout = Duration(seconds=0.05)
+        timeout = Duration(seconds=0.01)
 
         for bot in list(self._bots.values()):
             try:
@@ -120,13 +135,22 @@ class MultiBotGlobalPose(Node):
             except (LookupException, ConnectivityException, ExtrapolationException):
                 continue
 
-            out = PoseStamped()
+            out = Odometry()
             out.header.frame_id = self.global_frame
+            out.child_frame_id = bot.base_frame
             out.header.stamp = tf.header.stamp
-            out.pose.position.x = tf.transform.translation.x
-            out.pose.position.y = tf.transform.translation.y
-            out.pose.position.z = tf.transform.translation.z
-            out.pose.orientation = tf.transform.rotation
+
+            out.pose.pose.position.x = tf.transform.translation.x
+            out.pose.pose.position.y = tf.transform.translation.y
+            out.pose.pose.position.z = tf.transform.translation.z
+            out.pose.pose.orientation = tf.transform.rotation
+
+            src = self._last_odom.get(bot.bot_id)
+            if src is not None:
+                # Twist in Odometry must be expressed in child_frame_id.
+                # Assumption: aft_mapped -> base_link is identity, so we can reuse src.twist as-is.
+                out.twist.twist = src.twist.twist
+                out.twist.covariance = src.twist.covariance
 
             bot.pub.publish(out)
 
